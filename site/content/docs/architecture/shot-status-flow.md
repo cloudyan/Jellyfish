@@ -186,6 +186,7 @@ extract
 
 - 调后端接口
 - 使用后端返回的最新 `ShotRead`
+- 准备页优先消费后端聚合状态 `ShotPreparationState`
 - 用 `shot_extracted_candidates` 展示资产待确认项
 - 用 `shot_extracted_dialogue_candidates` 展示对白待确认项
 
@@ -195,6 +196,7 @@ extract
 
 这次改动新增了：
 
+- `GET /api/v1/studio/shots/{shot_id}/preparation-state`
 - `GET /api/v1/studio/shots/{shot_id}/extracted-candidates`
 - `PATCH /api/v1/studio/shots/{shot_id}/skip-extraction`
 - `PATCH /api/v1/studio/shots/extracted-candidates/{candidate_id}/link`
@@ -211,6 +213,44 @@ pnpm run openapi:update
 ```
 
 不要继续手写一层额外的 request 封装去复制 generated client。
+
+## 准备页聚合状态约定
+
+为了避免前端在“关联/忽略候选”之后自己猜测要刷新哪些局部状态，当前后端已经补了一层准备页聚合状态协议：
+
+- 查询接口：
+  - `GET /api/v1/studio/shots/{shot_id}/preparation-state`
+- 准备页专用现有关联接口：
+  - `POST /api/v1/studio/shots/{shot_id}/preparation-link`
+- 聚合状态：
+  - `shot`
+  - `assets_overview`
+  - `dialogue_candidates`
+  - `saved_dialogue_lines`
+  - `pending_confirm_count`
+  - `ready_for_generation`
+
+当前资源候选相关命令接口：
+
+- `PATCH /api/v1/studio/shots/extracted-candidates/{candidate_id}/link`
+- `PATCH /api/v1/studio/shots/extracted-candidates/{candidate_id}/ignore`
+- `PATCH /api/v1/studio/shots/{shot_id}/skip-extraction`
+- `PATCH /api/v1/studio/shots/extracted-dialogue-candidates/{candidate_id}/accept`
+- `PATCH /api/v1/studio/shots/extracted-dialogue-candidates/{candidate_id}/ignore`
+
+已经统一返回：
+
+- `ShotPreparationMutationResult`
+  - `action`
+  - `state`
+
+也就是说，准备页前端后续不应继续在这些动作成功后手写：
+
+- `loadAssetsOverview()`
+- `refreshCurrentShot()`
+- 再自己拼 `pendingConfirmCount`
+
+而应直接消费后端返回的最新聚合状态。
 
 ## 开发建议
 

@@ -835,7 +835,7 @@ const ChapterStudio: React.FC = () => {
               shotId: shot.id,
               requestBody: { skip },
             })
-            return { shotId: shot.id, data: res.data }
+            return { shotId: shot.id, data: res.data?.state.shot ?? null }
           }),
         )
         results.forEach(({ shotId, data }) => {

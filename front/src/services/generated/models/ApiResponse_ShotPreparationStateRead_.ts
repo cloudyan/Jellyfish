@@ -2,8 +2,8 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { ShotExtractedCandidateRead } from './ShotExtractedCandidateRead';
-export type ApiResponse_ShotExtractedCandidateRead_ = {
+import type { ShotPreparationStateRead } from './ShotPreparationStateRead';
+export type ApiResponse_ShotPreparationStateRead_ = {
     /**
      * 与 HTTP 状态码一致
      */
@@ -15,7 +15,7 @@ export type ApiResponse_ShotExtractedCandidateRead_ = {
     /**
      * 实际数据
      */
-    data?: (ShotExtractedCandidateRead | null);
+    data?: (ShotPreparationStateRead | null);
     /**
      * 附加元信息
      */

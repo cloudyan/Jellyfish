@@ -9,8 +9,8 @@ import type { ApiResponse_NoneType_ } from '../models/ApiResponse_NoneType_';
 import type { ApiResponse_PaginatedData_ShotLinkedAssetItem__ } from '../models/ApiResponse_PaginatedData_ShotLinkedAssetItem__';
 import type { ApiResponse_PaginatedData_ShotRead__ } from '../models/ApiResponse_PaginatedData_ShotRead__';
 import type { ApiResponse_ShotAssetsOverviewRead_ } from '../models/ApiResponse_ShotAssetsOverviewRead_';
-import type { ApiResponse_ShotExtractedCandidateRead_ } from '../models/ApiResponse_ShotExtractedCandidateRead_';
-import type { ApiResponse_ShotExtractedDialogueCandidateRead_ } from '../models/ApiResponse_ShotExtractedDialogueCandidateRead_';
+import type { ApiResponse_ShotPreparationMutationResultRead_ } from '../models/ApiResponse_ShotPreparationMutationResultRead_';
+import type { ApiResponse_ShotPreparationStateRead_ } from '../models/ApiResponse_ShotPreparationStateRead_';
 import type { ApiResponse_ShotRead_ } from '../models/ApiResponse_ShotRead_';
 import type { ApiResponse_ShotVideoPromptPreviewRead_ } from '../models/ApiResponse_ShotVideoPromptPreviewRead_';
 import type { ApiResponse_ShotVideoReadinessRead_ } from '../models/ApiResponse_ShotVideoReadinessRead_';
@@ -18,6 +18,7 @@ import type { ApiResponse_StudioScriptExtractionDraft_ } from '../models/ApiResp
 import type { ShotCreate } from '../models/ShotCreate';
 import type { ShotExtractedCandidateLinkRequest } from '../models/ShotExtractedCandidateLinkRequest';
 import type { ShotExtractedDialogueCandidateAcceptRequest } from '../models/ShotExtractedDialogueCandidateAcceptRequest';
+import type { ShotPreparationLinkRequest } from '../models/ShotPreparationLinkRequest';
 import type { ShotSkipExtractionUpdate } from '../models/ShotSkipExtractionUpdate';
 import type { ShotUpdate } from '../models/ShotUpdate';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -195,6 +196,52 @@ export class StudioShotsService {
         });
     }
     /**
+     * 获取镜头准备页聚合状态
+     * @returns ApiResponse_ShotPreparationStateRead_ Successful Response
+     * @throws ApiError
+     */
+    public static getShotPreparationStateApiApiV1StudioShotsShotIdPreparationStateGet({
+        shotId,
+    }: {
+        shotId: string,
+    }): CancelablePromise<ApiResponse_ShotPreparationStateRead_> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/studio/shots/{shot_id}/preparation-state',
+            path: {
+                'shot_id': shotId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 准备页关联现有实体并返回最新聚合状态
+     * @returns ApiResponse_ShotPreparationMutationResultRead_ Successful Response
+     * @throws ApiError
+     */
+    public static linkExistingAssetForPreparationApiApiV1StudioShotsShotIdPreparationLinkPost({
+        shotId,
+        requestBody,
+    }: {
+        shotId: string,
+        requestBody: ShotPreparationLinkRequest,
+    }): CancelablePromise<ApiResponse_ShotPreparationMutationResultRead_> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/studio/shots/{shot_id}/preparation-link',
+            path: {
+                'shot_id': shotId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * 预览镜头视频提示词
      * @returns ApiResponse_ShotVideoPromptPreviewRead_ Successful Response
      * @throws ApiError
@@ -254,7 +301,7 @@ export class StudioShotsService {
     }
     /**
      * 设置是否跳过镜头信息提取
-     * @returns ApiResponse_ShotRead_ Successful Response
+     * @returns ApiResponse_ShotPreparationMutationResultRead_ Successful Response
      * @throws ApiError
      */
     public static updateShotSkipExtractionApiV1StudioShotsShotIdSkipExtractionPatch({
@@ -263,7 +310,7 @@ export class StudioShotsService {
     }: {
         shotId: string,
         requestBody: ShotSkipExtractionUpdate,
-    }): CancelablePromise<ApiResponse_ShotRead_> {
+    }): CancelablePromise<ApiResponse_ShotPreparationMutationResultRead_> {
         return __request(OpenAPI, {
             method: 'PATCH',
             url: '/api/v1/studio/shots/{shot_id}/skip-extraction',
@@ -279,7 +326,7 @@ export class StudioShotsService {
     }
     /**
      * 确认并关联镜头提取候选项
-     * @returns ApiResponse_ShotExtractedCandidateRead_ Successful Response
+     * @returns ApiResponse_ShotPreparationMutationResultRead_ Successful Response
      * @throws ApiError
      */
     public static linkExtractedCandidateApiV1StudioShotsExtractedCandidatesCandidateIdLinkPatch({
@@ -288,7 +335,7 @@ export class StudioShotsService {
     }: {
         candidateId: number,
         requestBody: ShotExtractedCandidateLinkRequest,
-    }): CancelablePromise<ApiResponse_ShotExtractedCandidateRead_> {
+    }): CancelablePromise<ApiResponse_ShotPreparationMutationResultRead_> {
         return __request(OpenAPI, {
             method: 'PATCH',
             url: '/api/v1/studio/shots/extracted-candidates/{candidate_id}/link',
@@ -304,14 +351,14 @@ export class StudioShotsService {
     }
     /**
      * 忽略镜头提取候选项
-     * @returns ApiResponse_ShotExtractedCandidateRead_ Successful Response
+     * @returns ApiResponse_ShotPreparationMutationResultRead_ Successful Response
      * @throws ApiError
      */
     public static ignoreExtractedCandidateApiV1StudioShotsExtractedCandidatesCandidateIdIgnorePatch({
         candidateId,
     }: {
         candidateId: number,
-    }): CancelablePromise<ApiResponse_ShotExtractedCandidateRead_> {
+    }): CancelablePromise<ApiResponse_ShotPreparationMutationResultRead_> {
         return __request(OpenAPI, {
             method: 'PATCH',
             url: '/api/v1/studio/shots/extracted-candidates/{candidate_id}/ignore',
@@ -325,7 +372,7 @@ export class StudioShotsService {
     }
     /**
      * 接受镜头提取对白候选项
-     * @returns ApiResponse_ShotExtractedDialogueCandidateRead_ Successful Response
+     * @returns ApiResponse_ShotPreparationMutationResultRead_ Successful Response
      * @throws ApiError
      */
     public static acceptExtractedDialogueCandidateApiV1StudioShotsExtractedDialogueCandidatesCandidateIdAcceptPatch({
@@ -334,7 +381,7 @@ export class StudioShotsService {
     }: {
         candidateId: number,
         requestBody?: (ShotExtractedDialogueCandidateAcceptRequest | null),
-    }): CancelablePromise<ApiResponse_ShotExtractedDialogueCandidateRead_> {
+    }): CancelablePromise<ApiResponse_ShotPreparationMutationResultRead_> {
         return __request(OpenAPI, {
             method: 'PATCH',
             url: '/api/v1/studio/shots/extracted-dialogue-candidates/{candidate_id}/accept',
@@ -350,14 +397,14 @@ export class StudioShotsService {
     }
     /**
      * 忽略镜头提取对白候选项
-     * @returns ApiResponse_ShotExtractedDialogueCandidateRead_ Successful Response
+     * @returns ApiResponse_ShotPreparationMutationResultRead_ Successful Response
      * @throws ApiError
      */
     public static ignoreExtractedDialogueCandidateApiV1StudioShotsExtractedDialogueCandidatesCandidateIdIgnorePatch({
         candidateId,
     }: {
         candidateId: number,
-    }): CancelablePromise<ApiResponse_ShotExtractedDialogueCandidateRead_> {
+    }): CancelablePromise<ApiResponse_ShotPreparationMutationResultRead_> {
         return __request(OpenAPI, {
             method: 'PATCH',
             url: '/api/v1/studio/shots/extracted-dialogue-candidates/{candidate_id}/ignore',

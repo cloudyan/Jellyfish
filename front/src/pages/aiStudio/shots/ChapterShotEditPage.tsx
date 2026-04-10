@@ -9,6 +9,7 @@ import type {
   ShotDialogLineUpdate,
   ShotExtractionSummaryRead,
   ShotExtractedDialogueCandidateRead,
+  ShotPreparationStateRead,
   ShotRead,
 } from '../../../services/generated'
 import {
@@ -18,8 +19,6 @@ import {
   StudioProjectsService,
   StudioShotDialogLinesService,
   StudioShotsService,
-  StudioShotCharacterLinksService,
-  StudioShotLinksService,
 } from '../../../services/generated'
 import { executeAsyncTaskCreate, executeTaskCancel, notifyExistingTask } from '../components/taskActionHelpers'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
@@ -196,8 +195,9 @@ export function ChapterShotEditPage() {
   const [scriptExcerpt, setScriptExcerpt] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [preparationState, setPreparationState] = useState<ShotPreparationStateRead | null>(null)
   const [shotAssetsOverview, setShotAssetsOverview] = useState<ShotAssetsOverviewRead | null>(null)
-  const assetsOverviewRequestSeqRef = useRef(0)
+  const preparationStateRequestSeqRef = useRef(0)
   const [extractingAssets, setExtractingAssets] = useState(false)
   const [batchExtractingAssets, setBatchExtractingAssets] = useState(false)
   const [skipExtractionUpdating, setSkipExtractionUpdating] = useState(false)
@@ -318,8 +318,9 @@ export function ChapterShotEditPage() {
   const loadPage = useCallback(async () => {
     if (!chapterId || !shotId || !projectId) return
     setLoading(true)
+    setDialogLoading(true)
     try {
-      const [projectRes, chRes, listRes, shotRes] = await Promise.all([
+      const [projectRes, chRes, listRes, preparationRes] = await Promise.all([
         StudioProjectsService.getProjectApiV1StudioProjectsProjectIdGet({ projectId }),
         StudioChaptersService.getChapterApiV1StudioChaptersChapterIdGet({ chapterId }),
         StudioShotsService.listShotsApiV1StudioShotsGet({
@@ -329,7 +330,7 @@ export function ChapterShotEditPage() {
           order: 'index',
           isDesc: false,
         }),
-        StudioShotsService.getShotApiV1StudioShotsShotIdGet({ shotId }),
+        StudioShotsService.getShotPreparationStateApiApiV1StudioShotsShotIdPreparationStateGet({ shotId }),
       ])
       const nextVisualStyle = projectRes.data?.visual_style
       const nextStyle = projectRes.data?.style
@@ -345,9 +346,9 @@ export function ChapterShotEditPage() {
       setChapterIndex(typeof c?.index === 'number' ? c.index : null)
 
       const items = listRes.data?.items ?? []
-      setShots(items)
+      const preparationState = preparationRes.data ?? null
+      const s = preparationState?.shot ?? null
 
-      const s = shotRes.data
       if (!s) {
         message.error('分镜不存在')
         navigate(getChapterShotsPath(projectId, chapterId), { replace: true })
@@ -359,16 +360,21 @@ export function ChapterShotEditPage() {
         return
       }
 
+      setPreparationState(preparationState)
       setShot(s)
       setTitle(s.title ?? '')
       setScriptExcerpt(s.script_excerpt ?? '')
-      setShotAssetsOverview(null)
-      setSavedDialogLines([])
-      setExtractedDialogLines([])
+      setShots(items.map((item) => (item.id === s.id ? s : item)))
+      setShotAssetsOverview(preparationState?.assets_overview ?? null)
+      setSavedDialogLines(preparationState?.saved_dialogue_lines ?? [])
+      setExtractedDialogLines(
+        (preparationState?.dialogue_candidates ?? []).filter((item) => item.candidate_status === 'pending'),
+      )
     } catch {
       message.error('加载失败')
       navigate(getChapterShotsPath(projectId, chapterId), { replace: true })
     } finally {
+      setDialogLoading(false)
       setLoading(false)
     }
   }, [chapterId, navigate, projectId, shotId])
@@ -380,69 +386,54 @@ export function ChapterShotEditPage() {
     dialogDebounceTimersRef.current.clear()
   }, [])
 
-  const loadAssetsOverview = useCallback(async () => {
-    if (!shotId) return
-    const reqSeq = ++assetsOverviewRequestSeqRef.current
-    try {
-      const res = await StudioShotsService.getShotAssetsOverviewApiApiV1StudioShotsShotIdAssetsOverviewGet({
-        shotId,
-      })
-      if (reqSeq !== assetsOverviewRequestSeqRef.current) return
-      setShotAssetsOverview(res.data ?? null)
-    } catch {
-      if (reqSeq !== assetsOverviewRequestSeqRef.current) return
-      setShotAssetsOverview(null)
-    }
-  }, [shotId])
-
-  const loadDialogLines = useCallback(async () => {
-    if (!shotId) return
-    setDialogLoading(true)
-    try {
-      const all: ShotDialogLineRead[] = []
-      let page = 1
-      const pageSize = 100
-      let total: number | null = null
-      while (true) {
-        const res = await StudioShotDialogLinesService.listShotDialogLinesApiV1StudioShotDialogLinesGet({
-          shotDetailId: shotId,
-          page,
-          pageSize,
-          order: 'index',
-          isDesc: false,
-        })
-        const data = res.data
-        const items = data?.items ?? []
-        if (typeof data?.pagination?.total === 'number') total = data.pagination.total
-        all.push(...items)
-        if (items.length < pageSize) break
-        if (typeof total === 'number' && all.length >= total) break
-        page += 1
+  const applyPreparationState = useCallback(
+    (state: ShotPreparationStateRead, options?: { syncBasicInfo?: boolean }) => {
+      setPreparationState(state)
+      const nextShot = state.shot
+      setShot(nextShot)
+      setShots((prev) => prev.map((item) => (item.id === nextShot.id ? nextShot : item)))
+      setShotAssetsOverview(state.assets_overview ?? null)
+      setSavedDialogLines(state.saved_dialogue_lines ?? [])
+      setExtractedDialogLines((state.dialogue_candidates ?? []).filter((item) => item.candidate_status === 'pending'))
+      if (options?.syncBasicInfo) {
+        setTitle(nextShot.title ?? '')
+        setScriptExcerpt(nextShot.script_excerpt ?? '')
       }
-      setSavedDialogLines(all)
-    } catch {
-      message.error('对白加载失败')
-    } finally {
-      setDialogLoading(false)
-    }
-  }, [shotId])
+    },
+    [],
+  )
 
-  const loadDialogueCandidates = useCallback(async () => {
-    if (!shotId) return
-    try {
-      const res = await StudioShotsService.getShotExtractedDialogueCandidatesApiV1StudioShotsShotIdExtractedDialogueCandidatesGet({
-        shotId,
-      })
-      setExtractedDialogLines((res.data ?? []).filter((item) => item.candidate_status === 'pending'))
-    } catch {
-      message.error('对白候选加载失败')
-      setExtractedDialogLines([])
-    }
-  }, [shotId])
+  const loadPreparationState = useCallback(
+    async (options?: { syncBasicInfo?: boolean; silent?: boolean }) => {
+      if (!shotId) return null
+      const reqSeq = ++preparationStateRequestSeqRef.current
+      setDialogLoading(true)
+      try {
+        const res = await StudioShotsService.getShotPreparationStateApiApiV1StudioShotsShotIdPreparationStateGet({
+          shotId,
+        })
+        if (reqSeq !== preparationStateRequestSeqRef.current) return null
+        const data = res.data ?? null
+        if (!data) return null
+        applyPreparationState(data, { syncBasicInfo: options?.syncBasicInfo })
+        return data
+      } catch {
+        if (!options?.silent) {
+          message.error('准备状态加载失败')
+        }
+        return null
+      } finally {
+        if (reqSeq === preparationStateRequestSeqRef.current) {
+          setDialogLoading(false)
+        }
+      }
+    },
+    [applyPreparationState, shotId],
+  )
 
   const reloadAfterExtractTaskSettled = useCallback(
-    createTaskSettledReloader(loadPage, loadAssetsOverview, loadDialogueCandidates),
-    [loadAssetsOverview, loadDialogueCandidates, loadPage],
+    createTaskSettledReloader(loadPage),
+    [loadPage],
   )
   const { task: extractTask, settledTask: extractSettledTask, trackTaskData: trackExtractTaskData, applyCancelData: applyExtractCancelData } = useCancelableRelationTask({
     enabled: !!chapterId,
@@ -461,19 +452,6 @@ export function ChapterShotEditPage() {
       : [],
   )
   const extractTaskActive = !!extractTask
-
-  const refreshCurrentShot = useCallback(async () => {
-    if (!shotId) return
-    try {
-      const res = await StudioShotsService.getShotApiV1StudioShotsShotIdGet({ shotId })
-      const next = res.data ?? null
-      if (!next) return
-      setShot(next)
-      setShots((prev) => prev.map((item) => (item.id === next.id ? next : item)))
-    } catch {
-      // 状态刷新失败不阻塞候选操作；下一次页面加载会重新同步。
-    }
-  }, [shotId])
 
   const scheduleSaveDialogLine = useCallback(
     (lineId: number, patch: ShotDialogLineUpdate) => {
@@ -527,7 +505,7 @@ export function ChapterShotEditPage() {
   }, [])
 
   const acceptExtractedDialogLine = useCallback(
-    async (line: ShotExtractedDialogueCandidateRead, options?: { silent?: boolean }) => {
+    async (line: ShotExtractedDialogueCandidateRead, options?: { silent?: boolean }): Promise<ShotPreparationStateRead | null> => {
       const text = (line.text ?? '').trim()
       if (!text) {
         if (!options?.silent) message.warning('请先填写对白内容')
@@ -543,7 +521,7 @@ export function ChapterShotEditPage() {
           target_name: line.target_name ?? null,
         },
       })
-      return res.data ?? null
+      return res.data?.state ?? null
     },
     [],
   )
@@ -556,9 +534,7 @@ export function ChapterShotEditPage() {
       try {
         const created = await acceptExtractedDialogLine(line)
         if (created) {
-          await loadDialogLines()
-          await loadDialogueCandidates()
-          await refreshCurrentShot()
+          applyPreparationState(created)
           message.success('已接受')
         }
       } catch {
@@ -567,7 +543,7 @@ export function ChapterShotEditPage() {
         setDialogAddingKeys((m) => ({ ...m, [loadingKey]: false }))
       }
     },
-    [acceptExtractedDialogLine, dialogAddingKeys, loadDialogLines, loadDialogueCandidates, refreshCurrentShot],
+    [acceptExtractedDialogLine, applyPreparationState, dialogAddingKeys],
   )
 
   const acceptAllExtractedDialogLines = useCallback(async () => {
@@ -575,17 +551,23 @@ export function ChapterShotEditPage() {
     setBatchDialogAdding(true)
     try {
       let acceptedCount = 0
+      let lastState: ShotPreparationStateRead | null = null
       for (const line of extractedDialogLines) {
         try {
           const accepted = await acceptExtractedDialogLine(line, { silent: true })
-          if (accepted) acceptedCount += 1
+          if (accepted) {
+            acceptedCount += 1
+            lastState = accepted
+          }
         } catch {
           // 逐条容错，最后统一反馈。
         }
       }
-      await loadDialogLines()
-      await loadDialogueCandidates()
-      await refreshCurrentShot()
+      if (lastState) {
+        applyPreparationState(lastState)
+      } else if (acceptedCount > 0) {
+        await loadPreparationState({ silent: true })
+      }
       if (acceptedCount === extractedDialogLines.length) {
         message.success(`已接受 ${acceptedCount} 条对白`)
       } else if (acceptedCount > 0) {
@@ -596,20 +578,28 @@ export function ChapterShotEditPage() {
     } finally {
       setBatchDialogAdding(false)
     }
-  }, [acceptExtractedDialogLine, batchDialogAdding, extractedDialogLines, loadDialogLines, loadDialogueCandidates, refreshCurrentShot])
+  }, [acceptExtractedDialogLine, applyPreparationState, batchDialogAdding, extractedDialogLines, loadPreparationState])
 
   const ignoreExtractedDialogLine = useCallback(
-    async (line: ShotExtractedDialogueCandidateRead, options?: { silent?: boolean }) => {
+    async (
+      line: ShotExtractedDialogueCandidateRead,
+      options?: { silent?: boolean; applyState?: boolean },
+    ): Promise<ShotPreparationStateRead | null> => {
       const loadingKey = String(line.id)
-      if (dialogAddingKeys[loadingKey]) return
+      if (dialogAddingKeys[loadingKey]) return null
       setDialogAddingKeys((m) => ({ ...m, [loadingKey]: true }))
       try {
-        await StudioShotsService.ignoreExtractedDialogueCandidateApiV1StudioShotsExtractedDialogueCandidatesCandidateIdIgnorePatch({
+        const res = await StudioShotsService.ignoreExtractedDialogueCandidateApiV1StudioShotsExtractedDialogueCandidatesCandidateIdIgnorePatch({
           candidateId: line.id,
         })
-        await loadDialogueCandidates()
-        await refreshCurrentShot()
+        const nextState = res.data?.state ?? null
+        if (nextState && options?.applyState !== false) {
+          applyPreparationState(nextState)
+        } else if (!nextState) {
+          await loadPreparationState({ silent: true })
+        }
         if (!options?.silent) message.success('已忽略')
+        return nextState
       } catch {
         if (!options?.silent) message.error('忽略失败')
         throw new Error('ignore failed')
@@ -617,7 +607,7 @@ export function ChapterShotEditPage() {
         setDialogAddingKeys((m) => ({ ...m, [loadingKey]: false }))
       }
     },
-    [dialogAddingKeys, loadDialogueCandidates, refreshCurrentShot],
+    [applyPreparationState, dialogAddingKeys, loadPreparationState],
   )
 
   const ignoreAllExtractedDialogLines = useCallback(async () => {
@@ -625,16 +615,21 @@ export function ChapterShotEditPage() {
     setBatchDialogAdding(true)
     try {
       let ignoredCount = 0
+      let lastState: ShotPreparationStateRead | null = null
       for (const line of extractedDialogLines) {
         try {
-          await ignoreExtractedDialogLine(line, { silent: true })
+          const ignored = await ignoreExtractedDialogLine(line, { silent: true, applyState: false })
           ignoredCount += 1
+          if (ignored) lastState = ignored
         } catch {
           // 逐条容错，最后统一反馈。
         }
       }
-      await loadDialogueCandidates()
-      await refreshCurrentShot()
+      if (lastState) {
+        applyPreparationState(lastState)
+      } else if (ignoredCount > 0) {
+        await loadPreparationState({ silent: true })
+      }
       if (ignoredCount === extractedDialogLines.length) {
         message.success(`已忽略 ${ignoredCount} 条对白`)
       } else if (ignoredCount > 0) {
@@ -645,7 +640,7 @@ export function ChapterShotEditPage() {
     } finally {
       setBatchDialogAdding(false)
     }
-  }, [batchDialogAdding, extractedDialogLines, ignoreExtractedDialogLine, loadDialogueCandidates, refreshCurrentShot])
+  }, [applyPreparationState, batchDialogAdding, extractedDialogLines, ignoreExtractedDialogLine, loadPreparationState])
 
   useEffect(() => {
     void loadPage()
@@ -678,8 +673,7 @@ export function ChapterShotEditPage() {
     const refreshAfterExternalCreate = async () => {
       pendingExternalAssetCreateRef.current = false
       resetExistenceCache()
-      await refreshCurrentShot()
-      await loadAssetsOverview()
+      await loadPreparationState({ silent: true })
     }
 
     const handleMessage = (event: MessageEvent) => {
@@ -701,17 +695,11 @@ export function ChapterShotEditPage() {
       window.removeEventListener('message', handleMessage)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [chapterId, loadAssetsOverview, projectId, refreshCurrentShot, shotId])
+  }, [chapterId, loadPreparationState, projectId, shotId])
 
-  useEffect(() => {
-    void loadAssetsOverview()
-  }, [loadAssetsOverview])
-
-  // 切换分镜时：清理对白防抖并拉取对白列表
+  // 切换分镜时：清理对白防抖，准备状态由 loadPage 统一加载
   useEffect(() => {
     clearDialogDebounceTimers()
-    void loadDialogLines()
-    void loadDialogueCandidates()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shotId])
 
@@ -753,15 +741,12 @@ export function ChapterShotEditPage() {
           shotId,
           requestBody: { skip },
         })
-        const nextShot = res.data ?? null
-        if (nextShot) {
-          setShot(nextShot)
-          setShots((prev) => prev.map((item) => (item.id === shotId ? { ...item, ...nextShot } : item)))
+        const nextState = res.data?.state ?? null
+        if (nextState) {
+          applyPreparationState(nextState)
         } else {
-          setShot((prev) => (prev ? { ...prev, skip_extraction: skip } : prev))
-          setShots((prev) => prev.map((item) => (item.id === shotId ? { ...item, skip_extraction: skip } : item)))
+          await loadPreparationState({ silent: true })
         }
-        await loadAssetsOverview()
         message.success(skip ? '已标记为无需提取' : '已恢复提取确认流程')
       } catch {
         message.error(skip ? '标记无需提取失败' : '恢复提取失败')
@@ -769,7 +754,7 @@ export function ChapterShotEditPage() {
         setSkipExtractionUpdating(false)
       }
     },
-    [loadAssetsOverview, shotId],
+    [applyPreparationState, loadPreparationState, shotId],
   )
 
   const extractAssets = useCallback(async () => {
@@ -963,39 +948,28 @@ export function ChapterShotEditPage() {
     if (!linkingItem?.asset_id) return
     setLinkingActionLoading(true)
     try {
-      const asset_id = linkingItem.asset_id
-      if (linkingKind === 'scene') {
-        await StudioShotLinksService.createProjectSceneLinkApiV1StudioShotLinksScenePost({
-          requestBody: { project_id: projectId, chapter_id: chapterId, shot_id: shotId, asset_id },
-        })
-      } else if (linkingKind === 'prop') {
-        await StudioShotLinksService.createProjectPropLinkApiV1StudioShotLinksPropPost({
-          requestBody: { project_id: projectId, chapter_id: chapterId, shot_id: shotId, asset_id },
-        })
-      } else if (linkingKind === 'costume') {
-        await StudioShotLinksService.createProjectCostumeLinkApiV1StudioShotLinksCostumePost({
-          requestBody: { project_id: projectId, chapter_id: chapterId, shot_id: shotId, asset_id },
-        })
-      } else {
-        // 角色关联：追加到最后（maxIndex + 1）
-        const linksRes = await StudioShotCharacterLinksService.listShotCharacterLinksApiV1StudioShotCharacterLinksGet({
-          shotId,
-        })
-        const links = (linksRes.data ?? []) as Array<{ index?: number | null }>
-        const maxIndex = links.reduce((m, it) => Math.max(m, typeof it?.index === 'number' ? it.index : -1), -1)
-        await StudioShotCharacterLinksService.upsertShotCharacterLinkApiV1StudioShotCharacterLinksPost({
-          requestBody: { shot_id: shotId, character_id: asset_id, index: maxIndex + 1 },
-        })
-      }
+      const res = await StudioShotsService.linkExistingAssetForPreparationApiApiV1StudioShotsShotIdPreparationLinkPost({
+        shotId,
+        requestBody: {
+          project_id: projectId,
+          chapter_id: chapterId,
+          entity_type: linkingKind === 'actor' ? 'character' : linkingKind,
+          linked_entity_id: linkingItem.asset_id,
+        },
+      })
       message.success('已关联')
-      await loadAssetsOverview()
+      if (res.data?.state) {
+        applyPreparationState(res.data.state)
+      } else {
+        await loadPreparationState({ silent: true })
+      }
       setLinkingOpen(false)
     } catch {
       message.error('关联失败')
     } finally {
       setLinkingActionLoading(false)
     }
-  }, [chapterId, linkingItem?.asset_id, linkingKind, loadAssetsOverview, projectId, shotId])
+  }, [applyPreparationState, chapterId, linkingItem?.asset_id, linkingKind, loadPreparationState, projectId, shotId])
 
   const handleNewAsset = useCallback(
     async (asset: AssetVM) => {
@@ -1083,10 +1057,14 @@ export function ChapterShotEditPage() {
       if (candidateActionIds[asset.candidateId]) return
       setCandidateActionIds((prev) => ({ ...prev, [asset.candidateId!]: true }))
       try {
-        await StudioShotsService.ignoreExtractedCandidateApiV1StudioShotsExtractedCandidatesCandidateIdIgnorePatch({
+        const res = await StudioShotsService.ignoreExtractedCandidateApiV1StudioShotsExtractedCandidatesCandidateIdIgnorePatch({
           candidateId: asset.candidateId,
         })
-        await loadAssetsOverview()
+        if (res.data?.state) {
+          applyPreparationState(res.data.state)
+        } else {
+          await loadPreparationState({ silent: true })
+        }
         message.success('已忽略该候选项')
       } catch {
         message.error('忽略失败')
@@ -1094,7 +1072,7 @@ export function ChapterShotEditPage() {
         setCandidateActionIds((prev) => ({ ...prev, [asset.candidateId!]: false }))
       }
     },
-    [candidateActionIds, loadAssetsOverview],
+    [applyPreparationState, candidateActionIds, loadPreparationState],
   )
 
 
@@ -1163,10 +1141,10 @@ export function ChapterShotEditPage() {
   const hasTitleAndExcerpt = !!title.trim() && !!scriptExcerpt.trim()
   const linkedAssetCount = shotAssetsOverview?.summary.linked_count ?? 0
   const pendingAssetCount = shotAssetsOverview?.summary.pending_count ?? 0
-  const pendingConfirmCount = pendingAssetCount + extractedDialogLines.length
+  const pendingConfirmCount = preparationState?.pending_confirm_count ?? (pendingAssetCount + extractedDialogLines.length)
   const assetsReady = !!shotAssetsOverview && pendingAssetCount === 0
   const dialogsReady = extractedDialogLines.length === 0
-  const statusReady = shot?.status === 'ready'
+  const statusReady = preparationState?.ready_for_generation ?? (shot?.status === 'ready')
   const basicInfoReady = hasTitleAndExcerpt
   const confirmReady = pendingConfirmCount === 0
   const currentShotActionable = shot ? isActionablePreparationShot(shot) || !basicInfoReady : false

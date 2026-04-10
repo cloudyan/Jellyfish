@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -341,6 +342,53 @@ class ShotAssetsOverviewRead(BaseModel):
     status: ShotStatus = Field(..., description="镜头流程状态")
     summary: ShotAssetsOverviewSummary = Field(..., description="总览统计")
     items: list[ShotAssetOverviewItem] = Field(default_factory=list, description="资产总览项")
+
+
+class ShotPreparationLinkEntityType(str, Enum):
+    character = "character"
+    scene = "scene"
+    prop = "prop"
+    costume = "costume"
+
+
+class ShotPreparationLinkRequest(BaseModel):
+    project_id: str = Field(..., description="项目 ID")
+    chapter_id: str = Field(..., description="章节 ID")
+    entity_type: ShotPreparationLinkEntityType = Field(..., description="准备页关联的实体类型")
+    linked_entity_id: str = Field(..., description="要关联的实体 ID")
+
+
+class ShotPreparationStateRead(BaseModel):
+    """分镜准备页聚合状态。"""
+
+    shot: ShotRead = Field(..., description="当前镜头最新状态")
+    assets_overview: ShotAssetsOverviewRead = Field(..., description="资产确认区聚合状态")
+    dialogue_candidates: list[ShotExtractedDialogueCandidateRead] = Field(
+        default_factory=list,
+        description="当前待处理/已存在的对白候选",
+    )
+    saved_dialogue_lines: list[ShotDialogLineRead] = Field(
+        default_factory=list,
+        description="当前已保存的对白行",
+    )
+    pending_confirm_count: int = Field(..., description="当前仍待确认的总数量（资产 + 对白）")
+    ready_for_generation: bool = Field(..., description="当前镜头是否已完成准备，可进入后续生成")
+
+
+class ShotPreparationMutationAction(str, Enum):
+    link_asset_candidate = "link_asset_candidate"
+    ignore_asset_candidate = "ignore_asset_candidate"
+    accept_dialogue_candidate = "accept_dialogue_candidate"
+    ignore_dialogue_candidate = "ignore_dialogue_candidate"
+    skip_extraction = "skip_extraction"
+    resume_extraction = "resume_extraction"
+
+
+class ShotPreparationMutationResultRead(BaseModel):
+    """准备页命令执行后的统一响应。"""
+
+    action: ShotPreparationMutationAction = Field(..., description="本次执行的准备页动作")
+    state: ShotPreparationStateRead = Field(..., description="动作完成后的最新准备页聚合状态")
 
 
 class ShotPromptAssetRef(BaseModel):

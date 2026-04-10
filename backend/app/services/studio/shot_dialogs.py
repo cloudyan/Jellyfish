@@ -54,6 +54,20 @@ async def list_paginated(
     )
 
 
+async def list_by_shot(
+    db: AsyncSession,
+    *,
+    shot_id: str,
+) -> list[ShotDialogLine]:
+    """按镜头读取全部已保存对白，供准备页聚合状态复用。"""
+    stmt = (
+        select(ShotDialogLine)
+        .where(ShotDialogLine.shot_detail_id == shot_id)
+        .order_by(ShotDialogLine.index.asc(), ShotDialogLine.id.asc())
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def create(
     db: AsyncSession,
     *,

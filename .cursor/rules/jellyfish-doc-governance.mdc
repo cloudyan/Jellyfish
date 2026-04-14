@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## 目录职责
 
-- `site/blog` 用于存放 release note。
+- `site/content/blog` 用于存放 release note。
 - 未被明确指定时，不修改已固化版本的 release note。
 - `site/content/docs` 栏目职责必须严格区分：
   - `guide` = 开发指南 / how-to，回答“怎么做”。
@@ -45,3 +45,32 @@ alwaysApply: true
   - 当前事实写入 `architecture`
   - 未来执行写入 `plans`
   - 不得混写在同一篇 how-to 中
+
+## Release Note 规范（site/content/blog）
+
+- release note 必须采用稳定结构（可按需裁剪，但顺序不变）：
+  - `Highlights`
+  - `Added` / `Changed` / `Fixed`
+  - `Breaking Changes`（存在行为/契约变化时必填）
+  - `Deprecations`（存在弃用路径时必填）
+  - `Security`
+  - `Known Issues`
+  - `Migration Guide`
+  - `Rollback Notes`
+  - `Compatibility Matrix`
+  - `Validation Commands`
+  - `Upgrade Checklist`
+  - `References`
+  - `Notes for Contributors`
+  - `Acknowledgements`
+- frontmatter 最低要求：
+  - `title`
+  - `date`
+  - `description`
+  - `tags`
+  - `authors`
+- 写作风格要求：
+  - 使用维护者发布口径，优先“变更结论 + 升级动作 + 风险提示”。
+  - 术语保持一致，不混用状态语义（如 `shot.status` 与 runtime task status）。
+  - 升级、回滚、验证信息必须具备可执行性，避免模糊指引。
+  - 采用清单化与短段落表达，避免重复叙述与无信息密度段落。

@@ -13,7 +13,7 @@
    - 复杂函数需补充参数说明、返回值说明（如适用）与关键内部逻辑注释。
    - 注释应与实现保持同步，避免过时或空泛描述。
 6. `site` 文档目录中：
-   - `blog` 用于存放 release note。
+   - `site/content/blog` 用于存放 release note。
    - 已固化版本的 release note，在未被明确指定时不得修改。
 7. `site/content/docs` 的栏目职责必须严格区分：
    - `guide` = 开发指南 / how-to，回答“怎么做”。
@@ -112,6 +112,30 @@
    - 当前事实写入 `architecture`
    - 未来执行写入 `plans`
    - 不得混写在同一篇 how-to 中
+4. release note（`site/content/blog`）格式与风格规范：
+   - 必须采用稳定章节结构（按需裁剪，但顺序保持一致）：
+     - `Highlights`
+     - `Added` / `Changed` / `Fixed`
+     - `Breaking Changes`（如有行为或契约变化必须填写）
+     - `Deprecations`（如有弃用路径必须填写）
+     - `Security`
+     - `Known Issues`
+     - `Migration Guide`
+     - `Rollback Notes`
+     - `Compatibility Matrix`
+     - `Validation Commands`
+     - `Upgrade Checklist`
+     - `References`
+     - `Notes for Contributors`
+     - `Acknowledgements`
+   - 必须包含 frontmatter：`title`、`date`、`description`、`tags`、`authors`。
+   - 文风要求：
+     - 使用“维护者发布口径”，优先结论与可执行信息，避免冗长叙事。
+     - 术语必须稳定一致（如 `shot.status`、runtime task status、`video-readiness`）。
+     - 升级步骤、回滚步骤、验证命令必须可直接执行，避免模糊描述。
+   - 对外可读性要求：
+     - 优先短段落与清单化表达；避免重复解释同一事实。
+     - 明确区分“新增能力”“行为变化”“兼容风险”“已知问题”。
 
 ## 标准完成状态
 

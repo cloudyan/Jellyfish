@@ -33,11 +33,13 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { LlmService } from '../../../services/generated/services/LlmService'
-import type { ProviderRead, ProviderStatus } from '../../../services/generated'
+import type { ProviderRead, ProviderStatus, ProviderSupportedRead } from '../../../services/generated'
 import { PROVIDER_STATUS_MAP, SORT_OPTIONS, maskUrl } from './constants'
 
 export default function ProvidersTab() {
   const [providers, setProviders] = useState<ProviderRead[]>([])
+  const [supportedSpecs, setSupportedSpecs] = useState<ProviderSupportedRead[]>([])
+  const [supportedLoading, setSupportedLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'updated' | 'name'>('updated')
@@ -75,6 +77,53 @@ export default function ProvidersTab() {
     void load()
   }, [search, sortBy])
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setSupportedLoading(true)
+      try {
+        const res = await LlmService.listSupportedProvidersApiV1LlmProvidersSupportedGet({})
+        if (!cancelled) setSupportedSpecs(res.data ?? [])
+      } catch {
+        if (!cancelled) {
+          message.error('加载系统支持的供应商列表失败')
+          setSupportedSpecs([])
+        }
+      } finally {
+        if (!cancelled) setSupportedLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const providerNameOptions = useMemo(() => {
+    const fromApi = supportedSpecs.map((s) => ({
+      label: s.is_experimental ? `${s.display_name}（实验）` : s.display_name,
+      value: s.display_name,
+    }))
+    const name = providerEditing?.name?.trim()
+    if (!name) return fromApi
+    const known = supportedSpecs.some(
+      (s) => s.display_name === name || (s.aliases?.length && s.aliases.includes(name)),
+    )
+    if (known) return fromApi
+    return [{ label: `${name}（历史/未在清单内）`, value: name }, ...fromApi]
+  }, [supportedSpecs, providerEditing])
+
+  const applyDefaultBaseUrlForDisplayName = (displayName: string) => {
+    const spec = supportedSpecs.find(
+      (s) => s.display_name === displayName || (s.aliases?.length && s.aliases.includes(displayName)),
+    )
+    const def = spec?.default_base_url?.trim()
+    if (!def) return
+    const current = (form.getFieldValue('base_url') as string | undefined)?.trim()
+    if (!providerEditing || !current) {
+      form.setFieldsValue({ base_url: def })
+    }
+  }
+
   const providerList = useMemo(() => {
     let list = providers
     if (sortBy === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name))
@@ -102,6 +151,8 @@ export default function ProvidersTab() {
         const requestBody: Parameters<typeof LlmService.updateProviderApiV1LlmProvidersProviderIdPatch>[0]['requestBody'] = {
           name: values.name,
           base_url: values.base_url,
+          image_base_url: values.image_base_url ?? null,
+          video_base_url: values.video_base_url ?? null,
           description: values.description ?? null,
           status: values.status ?? null,
         }
@@ -122,6 +173,8 @@ export default function ProvidersTab() {
             id,
             name: values.name,
             base_url: values.base_url,
+            image_base_url: values.image_base_url ?? null,
+            video_base_url: values.video_base_url ?? null,
             description: values.description,
             status: values.status,
             api_key: values.api_key,
@@ -174,6 +227,8 @@ export default function ProvidersTab() {
       form.setFieldsValue({
         name: p.name,
         base_url: p.base_url,
+        image_base_url: p.image_base_url ?? null,
+        video_base_url: p.video_base_url ?? null,
         api_key: '********',
         api_secret: '********',
         description: p.description,
@@ -476,10 +531,18 @@ export default function ProvidersTab() {
                 <div className="font-medium">{selectedProvider.name}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500 mb-1">Base URL</div>
+                <div className="text-sm text-gray-500 mb-1">文本/通用 Base URL</div>
                 <Tooltip title={selectedProvider.base_url}>
                   <span className="text-sm">{maskUrl(selectedProvider.base_url)}</span>
                 </Tooltip>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">图片 Base URL（可选覆盖）</div>
+                <span className="text-sm">{selectedProvider.image_base_url ? maskUrl(selectedProvider.image_base_url) : '回退到文本/通用'}</span>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">视频 Base URL（可选覆盖）</div>
+                <span className="text-sm">{selectedProvider.video_base_url ? maskUrl(selectedProvider.video_base_url) : '回退到文本/通用'}</span>
               </div>
               <div>
                 <div className="text-sm text-gray-500 mb-1">描述</div>
@@ -519,8 +582,16 @@ export default function ProvidersTab() {
                 <div className="font-medium">{selectedProvider.name}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500 mb-1">Base URL</div>
+                <div className="text-sm text-gray-500 mb-1">文本/通用 Base URL</div>
                 <span className="text-sm">{maskUrl(selectedProvider.base_url)}</span>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">图片 Base URL（可选覆盖）</div>
+                <span className="text-sm">{selectedProvider.image_base_url ? maskUrl(selectedProvider.image_base_url) : '回退到文本/通用'}</span>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">视频 Base URL（可选覆盖）</div>
+                <span className="text-sm">{selectedProvider.video_base_url ? maskUrl(selectedProvider.video_base_url) : '回退到文本/通用'}</span>
               </div>
               <Space>
                 <Button
@@ -557,20 +628,27 @@ export default function ProvidersTab() {
         <Form form={form} layout="vertical" className="pt-2">
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请选择供应商' }]}>
             <Select
-              placeholder="选择供应商"
-              options={[
-                { label: 'OpenAI', value: 'OpenAI' },
-                { label: '火山引擎', value: '火山引擎' },
-                { label: '阿里百炼', value: '阿里百炼' },
-              ]}
+              showSearch
+              optionFilterProp="label"
+              loading={supportedLoading}
+              placeholder={supportedLoading ? '加载供应商清单…' : '选择供应商'}
+              options={providerNameOptions}
+              notFoundContent={supportedLoading ? '加载中…' : '暂无数据'}
+              onChange={(v) => applyDefaultBaseUrlForDisplayName(String(v))}
             />
           </Form.Item>
           <Form.Item
             name="base_url"
-            label="Base URL"
+            label="文本/通用 Base URL"
             rules={[{ required: true }, { type: 'url', message: '请输入有效 URL' }]}
           >
             <Input placeholder="https://api.openai.com/v1" />
+          </Form.Item>
+          <Form.Item name="image_base_url" label="图片 Base URL（可选覆盖）" rules={[{ type: 'url', message: '请输入有效 URL' }]}>
+            <Input placeholder="留空则回退到文本/通用 Base URL" />
+          </Form.Item>
+          <Form.Item name="video_base_url" label="视频 Base URL（可选覆盖）" rules={[{ type: 'url', message: '请输入有效 URL' }]}>
+            <Input placeholder="留空则回退到文本/通用 Base URL" />
           </Form.Item>
           <Form.Item name="api_key" label="API Key" help={providerEditing ? '留空则不修改' : '请勿分享密钥'}>
             <Input.Password placeholder="AK" />

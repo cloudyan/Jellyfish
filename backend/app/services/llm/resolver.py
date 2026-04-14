@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.llm import Model, ModelCategoryKey, ModelSettings, Provider
 from app.services.common import entity_not_found
+from app.services.llm.provider_resolver import resolve_effective_base_url
 
 
 def _settings_model_id(settings_row: ModelSettings | None, category: ModelCategoryKey) -> str | None:
@@ -155,7 +156,7 @@ async def build_chat_model_from_provider(
     kwargs["api_key"] = api_key
     kwargs.setdefault("temperature", 0)
 
-    base_url = (provider.base_url or "").strip()
+    base_url = resolve_effective_base_url(provider=provider, category=ModelCategoryKey.text)
     if base_url:
         kwargs.setdefault("base_url", base_url)
 

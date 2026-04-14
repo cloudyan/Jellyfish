@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.dependencies import get_db
-from app.main import app
 from app.models.llm import Provider, ProviderStatus
+from tests.support.llm_api_app import build_llm_only_app
+
+# 仅挂载 /api/v1/llm，避免导入 app.main 时连带加载 film 路由与 Celery。
+llm_app = build_llm_only_app()
+
+
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    with TestClient(llm_app) as c:
+        yield c
 
 
 class _FakeLlmDB:
@@ -66,7 +76,7 @@ def _override_db(db: _FakeLlmDB):
 
 def test_create_provider_returns_created_envelope(client: TestClient) -> None:
     db = _FakeLlmDB()
-    app.dependency_overrides[get_db] = _override_db(db)
+    llm_app.dependency_overrides[get_db] = _override_db(db)
     try:
         response = client.post(
             "/api/v1/llm/providers",
@@ -82,7 +92,7 @@ def test_create_provider_returns_created_envelope(client: TestClient) -> None:
             },
         )
     finally:
-        app.dependency_overrides.clear()
+        llm_app.dependency_overrides.clear()
 
     assert response.status_code == 201
     body = response.json()
@@ -96,33 +106,38 @@ def test_create_provider_returns_created_envelope(client: TestClient) -> None:
 
 def test_get_provider_not_found_returns_api_response(client: TestClient) -> None:
     db = _FakeLlmDB()
-    app.dependency_overrides[get_db] = _override_db(db)
+    llm_app.dependency_overrides[get_db] = _override_db(db)
     try:
         response = client.get("/api/v1/llm/providers/missing")
     finally:
-        app.dependency_overrides.clear()
+        llm_app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "Provider not found", "data": None}
+    assert response.json() == {
+        "code": 404,
+        "message": "Provider not found",
+        "data": None,
+        "meta": None,
+    }
 
 
 def test_delete_provider_returns_empty_envelope(client: TestClient) -> None:
     db = _FakeLlmDB()
     _seed_provider(db, "p-delete")
-    app.dependency_overrides[get_db] = _override_db(db)
+    llm_app.dependency_overrides[get_db] = _override_db(db)
     try:
         response = client.delete("/api/v1/llm/providers/p-delete")
     finally:
-        app.dependency_overrides.clear()
+        llm_app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json() == {"code": 200, "message": "success", "data": None}
+    assert response.json() == {"code": 200, "message": "success", "data": None, "meta": None}
     assert "p-delete" not in db.providers
 
 
 def test_create_provider_validation_error_returns_api_response(client: TestClient) -> None:
     db = _FakeLlmDB()
-    app.dependency_overrides[get_db] = _override_db(db)
+    llm_app.dependency_overrides[get_db] = _override_db(db)
     try:
         response = client.post(
             "/api/v1/llm/providers",
@@ -132,10 +147,31 @@ def test_create_provider_validation_error_returns_api_response(client: TestClien
             },
         )
     finally:
-        app.dependency_overrides.clear()
+        llm_app.dependency_overrides.clear()
 
     assert response.status_code == 422
     body = response.json()
     assert body["code"] == 422
     assert body["data"] is None
     assert "base_url" in body["message"]
+
+
+def test_list_supported_providers_returns_capability_matrix(client: TestClient) -> None:
+    response = client.get("/api/v1/llm/providers/supported")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == 200
+    assert isinstance(body["data"], list)
+    keys = {item["key"] for item in body["data"]}
+    assert "openai" in keys
+    assert "volcengine" in keys
+
+
+def test_list_supported_providers_can_filter_by_category(client: TestClient) -> None:
+    response = client.get("/api/v1/llm/providers/supported", params={"category": "video"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == 200
+    assert isinstance(body["data"], list)
+    for item in body["data"]:
+        assert "video" in item["supported_categories"]

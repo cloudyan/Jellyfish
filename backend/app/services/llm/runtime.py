@@ -9,6 +9,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy.orm import Session
 
 from app.models.llm import Model, ModelCategoryKey, ModelSettings, Provider
+from app.services.llm.provider_resolver import resolve_effective_base_url
 
 
 def _default_model_id(settings_row: ModelSettings | None, category: ModelCategoryKey) -> str | None:
@@ -63,7 +64,7 @@ def build_default_text_llm_sync(
     kwargs["api_key"] = api_key
     kwargs.setdefault("temperature", 0)
 
-    base_url = (provider.base_url or "").strip()
+    base_url = resolve_effective_base_url(provider=provider, category=ModelCategoryKey.text)
     if base_url:
         kwargs.setdefault("base_url", base_url)
 

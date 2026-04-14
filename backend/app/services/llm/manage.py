@@ -15,8 +15,11 @@ from app.schemas.llm import (
     ModelUpdate,
     ProviderCreate,
     ProviderRead,
+    ProviderSupportedRead,
     ProviderUpdate,
 )
+from app.services.llm.provider_registry import list_registered_providers
+from app.bootstrap import bootstrap_all_registries
 from app.services.common import (
     create_and_refresh,
     delete_if_exists,
@@ -79,6 +82,8 @@ async def create_provider(
             id=body.id,
             name=body.name,
             base_url=body.base_url,
+            image_base_url=body.image_base_url,
+            video_base_url=body.video_base_url,
             api_key=body.api_key,
             api_secret=body.api_secret,
             description=body.description,
@@ -255,3 +260,22 @@ async def update_model_settings(
     settings = await get_or_create_settings(db)
     patch_model(settings, body.model_dump())
     return await flush_and_refresh(db, settings)
+
+
+def list_supported_providers(*, category: ModelCategoryKey | None) -> list[ProviderSupportedRead]:
+    # 防御性初始化：保证在非应用生命周期上下文（如单测）下也可返回内置清单。
+    bootstrap_all_registries()
+    specs = list_registered_providers(category=category)
+    return [
+        ProviderSupportedRead(
+            key=spec.key,
+            display_name=spec.display_name,
+            aliases=list(spec.aliases),
+            supported_categories=list(spec.supported_categories),
+            default_base_url=spec.default_base_url,
+            requires_api_key=spec.requires_api_key,
+            requires_api_secret=spec.requires_api_secret,
+            is_experimental=spec.is_experimental,
+        )
+        for spec in specs
+    ]

@@ -15,6 +15,7 @@ from app.services.llm import (
     get_provider_by_id_or_obj,
     get_provider_by_model_or_id,
 )
+from app.services.llm.provider_resolver import resolve_effective_base_url
 
 
 @pytest.mark.asyncio
@@ -140,4 +141,27 @@ async def test_build_chat_model_from_provider_builds_chatopenai_with_model_param
         assert chat_model.kwargs["max_tokens"] == 256
 
     await engine.dispose()
+
+
+def test_resolve_effective_base_url_prefers_category_specific_url() -> None:
+    provider = Provider(
+        id="p1",
+        name="OpenAI",
+        base_url="https://gateway.example/v1",
+        image_base_url="https://image-gateway.example/v1",
+        video_base_url="https://video-gateway.example/v1",
+        api_key="k",
+    )
+    assert (
+        resolve_effective_base_url(provider=provider, category=ModelCategoryKey.text)
+        == "https://gateway.example/v1"
+    )
+    assert (
+        resolve_effective_base_url(provider=provider, category=ModelCategoryKey.image)
+        == "https://image-gateway.example/v1"
+    )
+    assert (
+        resolve_effective_base_url(provider=provider, category=ModelCategoryKey.video)
+        == "https://video-gateway.example/v1"
+    )
 

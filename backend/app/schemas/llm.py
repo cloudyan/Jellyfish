@@ -13,7 +13,9 @@ class ProviderBase(BaseModel):
     """供应商通用字段（不含敏感字段）。"""
 
     name: str = Field(..., description="供应商名称")
-    base_url: str = Field(..., description="API Base URL")
+    base_url: str = Field(..., description="文本/通用 API Base URL")
+    image_base_url: str | None = Field(None, description="图片能力 API Base URL（可选覆盖）")
+    video_base_url: str | None = Field(None, description="视频能力 API Base URL（可选覆盖）")
     description: str = Field("", description="说明")
     status: ProviderStatus = Field(
         ProviderStatus.testing,
@@ -34,7 +36,9 @@ class ProviderUpdate(BaseModel):
     """更新供应商时的可选字段。"""
 
     name: str | None = Field(None, description="供应商名称")
-    base_url: str | None = Field(None, description="API Base URL")
+    base_url: str | None = Field(None, description="文本/通用 API Base URL")
+    image_base_url: str | None = Field(None, description="图片能力 API Base URL（可选覆盖）")
+    video_base_url: str | None = Field(None, description="视频能力 API Base URL（可选覆盖）")
     description: str | None = Field(None, description="说明")
     status: ProviderStatus | None = Field(
         None,
@@ -50,6 +54,22 @@ class ProviderRead(ProviderBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str = Field(..., description="供应商 ID")
+
+
+class ProviderSupportedRead(BaseModel):
+    """系统支持的供应商能力清单。"""
+
+    key: str = Field(..., description="供应商稳定键")
+    display_name: str = Field(..., description="供应商展示名")
+    aliases: list[str] = Field(default_factory=list, description="可识别别名")
+    supported_categories: list[ModelCategoryKey] = Field(
+        default_factory=list,
+        description="支持的模型类别",
+    )
+    default_base_url: str | None = Field(None, description="默认 API Base URL")
+    requires_api_key: bool = Field(True, description="是否要求 api_key")
+    requires_api_secret: bool = Field(False, description="是否要求 api_secret")
+    is_experimental: bool = Field(False, description="是否实验性供应商")
 
 
 class ModelBase(BaseModel):

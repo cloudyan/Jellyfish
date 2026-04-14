@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Input, InputNumber, Modal, message } from 'antd'
-import { PROJECT_STYLE_OPTIONS_BY_VISUAL, ProjectVisualStyleAndStyleFields } from '../../project/ProjectVisualStyleAndStyleFields'
+import { ProjectVisualStyleAndStyleFields } from '../../project/ProjectVisualStyleAndStyleFields'
+import { useProjectStyleOptions } from '../../project/useProjectStyleOptions'
 
 export type StudioAssetLike = {
   id: string
@@ -106,13 +107,14 @@ export function StudioAssetTypeFormModal({
   } | null
   onSeedConsumed?: () => void
 }) {
+  const { options: projectStyleOptions, defaultVisualStyle, getDefaultStyle } = useProjectStyleOptions()
   void _entityType
   const [formName, setFormName] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formTags, setFormTags] = useState('')
   const [formViewCount, setFormViewCount] = useState<number | null>(null)
-  const [formVisualStyle, setFormVisualStyle] = useState<'现实' | '动漫'>('现实')
-  const [formStyle, setFormStyle] = useState<string>(PROJECT_STYLE_OPTIONS_BY_VISUAL['现实'][0]?.value ?? '真人都市')
+  const [formVisualStyle, setFormVisualStyle] = useState<'现实' | '动漫'>(defaultVisualStyle as '现实' | '动漫')
+  const [formStyle, setFormStyle] = useState<string>(getDefaultStyle(defaultVisualStyle))
   const createFormInitializedRef = useRef(false)
 
   useEffect(() => {
@@ -125,12 +127,11 @@ export function StudioAssetTypeFormModal({
       setFormDesc(editing.description ?? '')
       setFormTags((editing.tags ?? []).join(', '))
       setFormViewCount(editing.view_count ?? null)
-      const nextVisual = (((editing as { visual_style?: '现实' | '动漫' }).visual_style ?? '现实') as '现实' | '动漫')
+      const nextVisual = (((editing as { visual_style?: '现实' | '动漫' }).visual_style ?? defaultVisualStyle) as '现实' | '动漫')
       setFormVisualStyle(nextVisual)
       setFormStyle(
         ((editing as { style?: string }).style as string | undefined) ??
-          PROJECT_STYLE_OPTIONS_BY_VISUAL[nextVisual]?.[0]?.value ??
-          '真人都市',
+          getDefaultStyle(nextVisual),
       )
       createFormInitializedRef.current = true
       return
@@ -140,20 +141,20 @@ export function StudioAssetTypeFormModal({
       if (seedCreateForm) {
         setFormName(seedCreateForm.name ?? '')
         setFormDesc(seedCreateForm.description ?? '')
-        const nextVisual = seedCreateForm.visual_style ?? '现实'
+        const nextVisual = seedCreateForm.visual_style ?? (defaultVisualStyle as '现实' | '动漫')
         setFormVisualStyle(nextVisual)
-        setFormStyle(seedCreateForm.style ?? PROJECT_STYLE_OPTIONS_BY_VISUAL[nextVisual]?.[0]?.value ?? '真人都市')
+        setFormStyle(seedCreateForm.style ?? getDefaultStyle(nextVisual))
         onSeedConsumed?.()
       } else {
         setFormName('')
         setFormDesc('')
-        setFormVisualStyle('现实')
-        setFormStyle(PROJECT_STYLE_OPTIONS_BY_VISUAL['现实'][0]?.value ?? '真人都市')
+        setFormVisualStyle(defaultVisualStyle as '现实' | '动漫')
+        setFormStyle(getDefaultStyle(defaultVisualStyle))
       }
       setFormTags('')
       setFormViewCount(null)
     }
-  }, [open, editing, seedCreateForm, onSeedConsumed])
+  }, [open, editing, seedCreateForm, onSeedConsumed, defaultVisualStyle, getDefaultStyle])
 
   const handleOk = async () => {
     if (!formName.trim()) {
@@ -246,6 +247,7 @@ export function StudioAssetTypeFormModal({
           <ProjectVisualStyleAndStyleFields
             visual_style={formVisualStyle}
             style={formStyle}
+            options={projectStyleOptions}
             onChange={(next) => {
               setFormVisualStyle(next.visual_style)
               setFormStyle(next.style)

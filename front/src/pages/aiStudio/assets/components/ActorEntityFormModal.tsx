@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Input, InputNumber, Modal, message } from 'antd'
 import { StudioEntitiesApi } from '../../../../services/studioEntities'
-import { PROJECT_STYLE_OPTIONS_BY_VISUAL, ProjectVisualStyleAndStyleFields } from '../../project/ProjectVisualStyleAndStyleFields'
+import { ProjectVisualStyleAndStyleFields } from '../../project/ProjectVisualStyleAndStyleFields'
+import { useProjectStyleOptions } from '../../project/useProjectStyleOptions'
 
 export type ActorEntityLike = {
   id: string
@@ -37,12 +38,13 @@ export function ActorEntityFormModal({
   onCancel: () => void
   onSuccess: (detail?: { created?: unknown }) => void | Promise<void>
 }) {
+  const { options: projectStyleOptions, defaultVisualStyle, getDefaultStyle } = useProjectStyleOptions()
   const [formName, setFormName] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formTags, setFormTags] = useState('')
   const [formViewCount, setFormViewCount] = useState<number | null>(null)
-  const [formVisualStyle, setFormVisualStyle] = useState<'现实' | '动漫'>('现实')
-  const [formStyle, setFormStyle] = useState<string>(PROJECT_STYLE_OPTIONS_BY_VISUAL['现实'][0]?.value ?? '真人都市')
+  const [formVisualStyle, setFormVisualStyle] = useState<'现实' | '动漫'>(defaultVisualStyle as '现实' | '动漫')
+  const [formStyle, setFormStyle] = useState<string>(getDefaultStyle(defaultVisualStyle))
 
   useEffect(() => {
     if (!open) return
@@ -51,20 +53,20 @@ export function ActorEntityFormModal({
       setFormDesc(editing.description ?? '')
       setFormTags((editing.tags ?? []).join(', '))
       setFormViewCount(editing.view_count ?? null)
-      const nextVisual = ((editing.visual_style as '现实' | '动漫' | undefined) ?? '现实') as '现实' | '动漫'
+      const nextVisual = ((editing.visual_style as '现实' | '动漫' | undefined) ?? defaultVisualStyle) as '现实' | '动漫'
       setFormVisualStyle(nextVisual)
       setFormStyle(
-        (editing.style as string | undefined) ?? PROJECT_STYLE_OPTIONS_BY_VISUAL[nextVisual]?.[0]?.value ?? '真人都市',
+        (editing.style as string | undefined) ?? getDefaultStyle(nextVisual),
       )
     } else {
       setFormName('')
       setFormDesc('')
       setFormTags('')
       setFormViewCount(null)
-      setFormVisualStyle('现实')
-      setFormStyle(PROJECT_STYLE_OPTIONS_BY_VISUAL['现实'][0]?.value ?? '真人都市')
+      setFormVisualStyle(defaultVisualStyle as '现实' | '动漫')
+      setFormStyle(getDefaultStyle(defaultVisualStyle))
     }
-  }, [open, editing])
+  }, [open, editing, defaultVisualStyle, getDefaultStyle])
 
   const handleOk = async () => {
     const name = formName.trim()
@@ -139,6 +141,7 @@ export function ActorEntityFormModal({
           <ProjectVisualStyleAndStyleFields
             visual_style={formVisualStyle}
             style={formStyle}
+            options={projectStyleOptions}
             onChange={(next) => {
               setFormVisualStyle(next.visual_style)
               setFormStyle(next.style)

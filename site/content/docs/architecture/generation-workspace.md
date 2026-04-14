@@ -70,6 +70,13 @@ backend/app/services/studio/generation/
 
 当前 `preview-prompt` 与 `create video task` 已共享同一份 `reference_mode + images` 上下文。
 
+当前视频参数（`size` / `ratio`）采用“项目默认 + 分镜覆盖 + 请求显式参数”解析：
+
+- 项目级默认：`Project.default_video_size` / `Project.default_video_ratio`
+- 分镜级覆盖：`ShotDetail.override_video_size` / `ShotDetail.override_video_ratio`
+- 执行优先级：请求参数 > 分镜覆盖 > 项目默认 > 供应商默认
+- 冲突规则：若 `size` 推导比例与 `ratio` 冲突，任务创建阶段直接报错
+
 ### `asset_image`
 
 当前资产图片生成已开始迁移到：

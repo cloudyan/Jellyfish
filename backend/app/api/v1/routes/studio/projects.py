@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.utils import apply_keyword_filter, apply_order, paginate
 from app.dependencies import get_db
 from app.models.studio import Project
+from app.models.types import ProjectStyle, ProjectVisualStyle
 from app.schemas.common import ApiResponse, PaginatedData, created_response, empty_response, paginated_response, success_response
 from app.services.common import (
     create_and_refresh,
@@ -23,12 +24,67 @@ from app.services.common import (
 from app.schemas.studio.projects import (
     ProjectCreate,
     ProjectRead,
+    ProjectStyleOptionsRead,
     ProjectUpdate,
+    StyleOption,
 )
 
 router = APIRouter()
 
 PROJECT_ORDER_FIELDS = {"name", "created_at", "updated_at", "progress"}
+VIDEO_RATIO_OPTIONS = ("16:9", "4:3", "1:1", "3:4", "9:16", "21:9")
+VIDEO_SIZE_OPTIONS = ("1920x1080", "1280x720", "1080x1920", "720x1280", "1024x1024")
+DEFAULT_VIDEO_RATIO = "16:9"
+DEFAULT_VIDEO_SIZE = "1920x1080"
+
+
+def _build_project_style_options() -> tuple[dict[ProjectVisualStyle, list[ProjectStyle]], dict[ProjectVisualStyle, ProjectStyle]]:
+    mapping: dict[ProjectVisualStyle, list[ProjectStyle]] = {key: [] for key in ProjectVisualStyle}
+    for item in ProjectStyle:
+        if item.name.startswith("real_people_"):
+            mapping[ProjectVisualStyle.live_action].append(item)
+            continue
+        if item.name.startswith("anime_") or item.name in {"guoman", "ink_wash"}:
+            mapping[ProjectVisualStyle.anime].append(item)
+            continue
+    defaults: dict[ProjectVisualStyle, ProjectStyle] = {
+        visual: styles[0]
+        for visual, styles in mapping.items()
+        if styles
+    }
+    return mapping, defaults
+
+
+def _validate_project_style_combo(*, visual_style: ProjectVisualStyle, style: ProjectStyle) -> None:
+    mapping, _defaults = _build_project_style_options()
+    allowed = mapping.get(visual_style, [])
+    if style not in allowed:
+        raise ValueError(
+            f"style is not allowed for visual_style: visual_style={visual_style.value}, "
+            f"style={style.value}, allowed={[item.value for item in allowed]}"
+        )
+
+
+@router.get(
+    "/style-options",
+    response_model=ApiResponse[ProjectStyleOptionsRead],
+    summary="获取项目风格与视频参数候选项",
+)
+async def get_project_style_options() -> ApiResponse[ProjectStyleOptionsRead]:
+    mapping, defaults = _build_project_style_options()
+    data = ProjectStyleOptionsRead(
+        visual_styles=[StyleOption(value=x.value, label=x.value) for x in ProjectVisualStyle],
+        styles_by_visual_style={
+            visual.value: [StyleOption(value=style.value, label=style.value) for style in styles]
+            for visual, styles in mapping.items()
+        },
+        default_style_by_visual_style={visual.value: style.value for visual, style in defaults.items()},
+        default_video_ratio=DEFAULT_VIDEO_RATIO,
+        default_video_size=DEFAULT_VIDEO_SIZE,
+        video_ratios=[StyleOption(value=x, label=x) for x in VIDEO_RATIO_OPTIONS],
+        video_sizes=[StyleOption(value=x, label=x) for x in VIDEO_SIZE_OPTIONS],
+    )
+    return success_response(data)
 
 
 @router.get(
@@ -67,6 +123,10 @@ async def create_project(
         body.id,
         detail=entity_already_exists("Project"),
     )
+    try:
+        _validate_project_style_combo(visual_style=body.visual_style, style=body.style)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     obj = await create_and_refresh(db, Project(**body.model_dump()))
     return created_response(ProjectRead.model_validate(obj))
 
@@ -95,7 +155,15 @@ async def update_project(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ProjectRead]:
     obj = await get_or_404(db, Project, project_id, detail=entity_not_found("Project"))
-    patch_model(obj, body.model_dump(exclude_unset=True))
+    update_data = body.model_dump(exclude_unset=True)
+    visual_style = update_data.get("visual_style", obj.visual_style)
+    style = update_data.get("style", obj.style)
+    if visual_style is not None and style is not None:
+        try:
+            _validate_project_style_combo(visual_style=visual_style, style=style)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    patch_model(obj, update_data)
     await flush_and_refresh(db, obj)
     return success_response(ProjectRead.model_validate(obj))
 

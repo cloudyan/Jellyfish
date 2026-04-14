@@ -173,6 +173,7 @@ async def test_build_run_args_maps_reference_images(monkeypatch: pytest.MonkeyPa
             prompt="最终视频提示词",
             images=["img-first", "img-last"],
             size="720x1280",
+            ratio=None,
         )
 
         assert run_args["provider"] == "openai"
@@ -211,6 +212,7 @@ async def test_build_run_args_uses_prompt_pack_when_prompt_missing(monkeypatch: 
             prompt=None,
             images=[],
             size=None,
+            ratio=None,
         )
 
         assert "镜头标题：镜头一" in run_args["input"]["prompt"]
@@ -243,6 +245,7 @@ async def test_build_run_args_rejects_disabled_provider() -> None:
                 prompt="最终视频提示词",
                 images=[],
                 size=None,
+                ratio=None,
             )
 
         assert exc_info.value.status_code == 503
@@ -292,4 +295,160 @@ async def test_shot_video_readiness_reports_missing_reference_frame() -> None:
         assert readiness.ready is False
         assert checks["reference_frames_ready"].ok is False
         assert "first" in checks["reference_frames_ready"].message
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_build_run_args_prefers_shot_override_over_project_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, engine = await _build_session()
+    async with db:
+        await _seed_shot_graph(db)
+        project = await db.get(Project, "p1")
+        assert project is not None
+        project.default_video_size = "1024x576"
+        project.default_video_ratio = "16:9"
+        detail = await db.get(ShotDetail, "s1")
+        assert detail is not None
+        detail.override_video_size = "720x1280"
+        detail.override_video_ratio = "9:16"
+        provider = Provider(id="p1", name="OpenAI", base_url="https://api.openai.com/v1", api_key="k")
+        model = Model(id="m_video", name="sora-mini", category=ModelCategoryKey.video, provider_id="p1")
+        settings = ModelSettings(id=1, default_video_model_id="m_video")
+        db.add_all([provider, model, settings])
+        await db.commit()
+
+        async def _fake_file_id_to_data_url(_db: AsyncSession, *, file_id: str) -> str:
+            return f"data:image/png;base64,{file_id}"
+
+        monkeypatch.setattr(
+            "app.services.film.generated_video.file_id_to_data_url",
+            _fake_file_id_to_data_url,
+        )
+
+        run_args = await build_run_args(
+            db,
+            shot_id="s1",
+            reference_mode="text_only",
+            prompt="最终视频提示词",
+            images=[],
+            size=None,
+            ratio=None,
+        )
+
+        assert run_args["input"]["size"] == "720x1280"
+        assert run_args["input"]["ratio"] == "9:16"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_build_run_args_uses_project_default_when_shot_override_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, engine = await _build_session()
+    async with db:
+        await _seed_shot_graph(db)
+        project = await db.get(Project, "p1")
+        assert project is not None
+        project.default_video_size = "1280x720"
+        project.default_video_ratio = "16:9"
+        provider = Provider(id="p1", name="OpenAI", base_url="https://api.openai.com/v1", api_key="k")
+        model = Model(id="m_video", name="sora-mini", category=ModelCategoryKey.video, provider_id="p1")
+        settings = ModelSettings(id=1, default_video_model_id="m_video")
+        db.add_all([provider, model, settings])
+        await db.commit()
+
+        async def _fake_file_id_to_data_url(_db: AsyncSession, *, file_id: str) -> str:
+            return f"data:image/png;base64,{file_id}"
+
+        monkeypatch.setattr(
+            "app.services.film.generated_video.file_id_to_data_url",
+            _fake_file_id_to_data_url,
+        )
+
+        run_args = await build_run_args(
+            db,
+            shot_id="s1",
+            reference_mode="text_only",
+            prompt="最终视频提示词",
+            images=[],
+            size=None,
+            ratio=None,
+        )
+
+        assert run_args["input"]["size"] == "1280x720"
+        assert run_args["input"]["ratio"] == "16:9"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_build_run_args_prefers_request_params_over_inherited(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, engine = await _build_session()
+    async with db:
+        await _seed_shot_graph(db)
+        project = await db.get(Project, "p1")
+        assert project is not None
+        project.default_video_size = "1280x720"
+        project.default_video_ratio = "16:9"
+        detail = await db.get(ShotDetail, "s1")
+        assert detail is not None
+        detail.override_video_size = "720x1280"
+        detail.override_video_ratio = "9:16"
+        provider = Provider(id="p1", name="OpenAI", base_url="https://api.openai.com/v1", api_key="k")
+        model = Model(id="m_video", name="sora-mini", category=ModelCategoryKey.video, provider_id="p1")
+        settings = ModelSettings(id=1, default_video_model_id="m_video")
+        db.add_all([provider, model, settings])
+        await db.commit()
+
+        async def _fake_file_id_to_data_url(_db: AsyncSession, *, file_id: str) -> str:
+            return f"data:image/png;base64,{file_id}"
+
+        monkeypatch.setattr(
+            "app.services.film.generated_video.file_id_to_data_url",
+            _fake_file_id_to_data_url,
+        )
+
+        run_args = await build_run_args(
+            db,
+            shot_id="s1",
+            reference_mode="text_only",
+            prompt="最终视频提示词",
+            images=[],
+            size="1920x1080",
+            ratio="16:9",
+        )
+
+        assert run_args["input"]["size"] == "1920x1080"
+        assert run_args["input"]["ratio"] == "16:9"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_build_run_args_rejects_conflicting_size_and_ratio(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, engine = await _build_session()
+    async with db:
+        await _seed_shot_graph(db)
+        provider = Provider(id="p1", name="OpenAI", base_url="https://api.openai.com/v1", api_key="k")
+        model = Model(id="m_video", name="sora-mini", category=ModelCategoryKey.video, provider_id="p1")
+        settings = ModelSettings(id=1, default_video_model_id="m_video")
+        db.add_all([provider, model, settings])
+        await db.commit()
+
+        async def _fake_file_id_to_data_url(_db: AsyncSession, *, file_id: str) -> str:
+            return f"data:image/png;base64,{file_id}"
+
+        monkeypatch.setattr(
+            "app.services.film.generated_video.file_id_to_data_url",
+            _fake_file_id_to_data_url,
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await build_run_args(
+                db,
+                shot_id="s1",
+                reference_mode="text_only",
+                prompt="最终视频提示词",
+                images=[],
+                size="1920x1080",
+                ratio="9:16",
+            )
+        assert exc_info.value.status_code == 400
+        assert "ratio conflicts with size" in str(exc_info.value.detail)
     await engine.dispose()

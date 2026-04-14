@@ -171,6 +171,18 @@ class ShotDetail(Base,TimestampMixin):
         comment="关联场景 ID（可空）；应用层需保证与镜头所属项目一致或全局",
     )
     duration: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="时长（秒）；镜头唯一时长来源")
+    override_video_size: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        default=None,
+        comment="分镜级视频尺寸覆盖（为空表示继承项目默认）",
+    )
+    override_video_ratio: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+        default=None,
+        comment="分镜级视频比例覆盖（为空表示继承项目默认）",
+    )
     mood_tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, comment="情绪标签（JSON 数组）")
     atmosphere: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="氛围描述")
     follow_atmosphere: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, comment="是否沿用氛围")

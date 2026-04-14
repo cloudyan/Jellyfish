@@ -32,6 +32,14 @@ export type ShotDetailRead = {
      */
     duration?: number;
     /**
+     * 分镜级视频尺寸覆盖；为空表示继承项目默认
+     */
+    override_video_size?: (string | null);
+    /**
+     * 分镜级视频比例覆盖；为空表示继承项目默认
+     */
+    override_video_ratio?: (string | null);
+    /**
      * 情绪标签
      */
     mood_tags?: Array<string>;

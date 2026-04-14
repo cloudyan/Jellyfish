@@ -22,7 +22,8 @@ import type { TaskStatus } from '../../../../services/generated'
 import { listTaskLinksNormalized } from '../../../../services/filmTaskLinks'
 import { buildFileDownloadUrl } from '../utils'
 import { DisplayImageCard } from './DisplayImageCard'
-import { PROJECT_STYLE_OPTIONS_BY_VISUAL, ProjectVisualStyleAndStyleFields } from '../../project/ProjectVisualStyleAndStyleFields'
+import { ProjectVisualStyleAndStyleFields } from '../../project/ProjectVisualStyleAndStyleFields'
+import { useProjectStyleOptions } from '../../project/useProjectStyleOptions'
 import { defaultTaskActionErrorMessage, executeAsyncTaskCreate, executeTaskCancel, notifyExistingTask } from '../../components/taskActionHelpers'
 import { handleTaskResultSafely } from '../../components/taskResultHelpers'
 import { useRelationTaskNotification } from '../../components/taskNotificationHelpers'
@@ -170,6 +171,7 @@ export function AssetEditPageBase<TAsset extends BaseAsset, TImage extends BaseA
   createGenerationTask,
   onNavigate,
 }: AssetEditPageBaseProps<TAsset, TImage>) {
+  const { options: projectStyleOptions, defaultVisualStyle, getDefaultStyle } = useProjectStyleOptions()
   const taskCopy = TASK_COPY.smartDetect
   const location = useLocation()
   const [loading, setLoading] = useState(true)
@@ -180,8 +182,8 @@ export function AssetEditPageBase<TAsset extends BaseAsset, TImage extends BaseA
   const [formDesc, setFormDesc] = useState('')
   const [formTags, setFormTags] = useState('')
   const [formViewCount, setFormViewCount] = useState(1)
-  const [formVisualStyle, setFormVisualStyle] = useState<'现实' | '动漫'>('现实')
-  const [formStyle, setFormStyle] = useState<string>(PROJECT_STYLE_OPTIONS_BY_VISUAL['现实'][0]?.value ?? '真人都市')
+  const [formVisualStyle, setFormVisualStyle] = useState<'现实' | '动漫'>(defaultVisualStyle as '现实' | '动漫')
+  const [formStyle, setFormStyle] = useState<string>(getDefaultStyle(defaultVisualStyle))
   const [savingBase, setSavingBase] = useState(false)
 
   const [smartDetectLoading, setSmartDetectLoading] = useState(false)
@@ -336,9 +338,9 @@ export function AssetEditPageBase<TAsset extends BaseAsset, TImage extends BaseA
       setFormDesc(nextAsset.description ?? '')
       setFormTags((nextAsset.tags ?? []).join(', '))
       {
-        const nextVisual = (nextAsset.visual_style ?? '现实') as '现实' | '动漫'
+        const nextVisual = (nextAsset.visual_style ?? defaultVisualStyle) as '现实' | '动漫'
         setFormVisualStyle(nextVisual)
-        setFormStyle((nextAsset.style as string | undefined) ?? PROJECT_STYLE_OPTIONS_BY_VISUAL[nextVisual]?.[0]?.value ?? '真人都市')
+        setFormStyle((nextAsset.style as string | undefined) ?? getDefaultStyle(nextVisual))
       }
 
       const targetCount = clampViewCount(nextAsset.view_count)
@@ -351,7 +353,7 @@ export function AssetEditPageBase<TAsset extends BaseAsset, TImage extends BaseA
     } finally {
       setLoading(false)
     }
-  }, [assetId, assetDisplayName, backTo, ensureImageSlots, getAsset, onNavigate])
+  }, [assetId, assetDisplayName, backTo, defaultVisualStyle, ensureImageSlots, getAsset, getDefaultStyle, onNavigate])
 
   useEffect(() => {
     void loadData()
@@ -830,6 +832,7 @@ export function AssetEditPageBase<TAsset extends BaseAsset, TImage extends BaseA
                     disabled={smartDetectBusy || savingBase}
                     visual_style={formVisualStyle}
                     style={formStyle}
+                    options={projectStyleOptions}
                     onChange={(next) => {
                       setFormVisualStyle(next.visual_style)
                       setFormStyle(next.style)

@@ -31,10 +31,10 @@ import { chapters as mockChapters, projects as mockProjects, type Project } from
 import { StudioChaptersService, StudioProjectsService } from '../../../services/generated'
 import type { ChapterRead, ProjectRead, ProjectStyle } from '../../../services/generated'
 import {
-  PROJECT_STYLE_OPTIONS_BY_VISUAL,
   ProjectVisualStyleAndStyleFields,
   type ProjectVisualStyleChoice,
 } from './ProjectVisualStyleAndStyleFields'
+import { useProjectStyleOptions } from './useProjectStyleOptions'
 import { getChapterPreparationState } from './ProjectWorkbench/chapterPreparation'
 import { ensureHasShotsBeforeShooting } from './ProjectWorkbench/ensureHasShotsBeforeShooting'
 import { getChapterShotsPath, getChapterStudioPath } from './ProjectWorkbench/routes'
@@ -54,10 +54,15 @@ type ProjectStageSummary = {
   storyboardCount?: number
 }
 type ProjectFlowStatsMap = Record<string, ProjectFlowStats>
+type ProjectView = Project & {
+  visualStyle?: ProjectVisualStyleChoice
+  defaultVideoSize?: string | null
+  defaultVideoRatio?: string | null
+}
 
 const ProjectLobby: React.FC = () => {
   const navigate = useNavigate()
-  const [projects, setProjects] = useState<Project[]>([])
+  const [projects, setProjects] = useState<ProjectView[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -69,15 +74,22 @@ const ProjectLobby: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [editingProject, setEditingProject] = useState<ProjectView | null>(null)
   const [projectStageMap, setProjectStageMap] = useState<Record<string, ProjectStageSummary>>({})
   const [projectFlowStatsMap, setProjectFlowStatsMap] = useState<ProjectFlowStatsMap>({})
+  const {
+    options: projectStyleOptions,
+    videoSizeOptions,
+    videoRatioOptions,
+    defaultVideoSize,
+    defaultVideoRatio,
+  } = useProjectStyleOptions()
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
 
   const useMock = import.meta.env.VITE_USE_MOCK === 'true'
 
-  const toUIProject = (p: ProjectRead): Project => {
+  const toUIProject = (p: ProjectRead): ProjectView => {
     const stats = (p.stats ?? {}) as Record<string, unknown>
     const getNum = (key: string) => {
       const v = stats[key]
@@ -104,6 +116,9 @@ const ProjectLobby: React.FC = () => {
         props: getNum('props'),
       },
       updatedAt,
+      visualStyle: (p.visual_style as ProjectVisualStyleChoice | undefined) ?? '现实',
+      defaultVideoSize: p.default_video_size ?? null,
+      defaultVideoRatio: p.default_video_ratio ?? null,
     }
   }
 
@@ -138,7 +153,7 @@ const ProjectLobby: React.FC = () => {
     void load()
   }, [])
 
-  const getProjectStatus = (p: Project): 'draft' | 'inProgress' | 'completed' => {
+  const getProjectStatus = (p: ProjectView): 'draft' | 'inProgress' | 'completed' => {
     if (p.progress >= 90) return 'completed'
     if (p.progress <= 5) return 'draft'
     return 'inProgress'
@@ -358,13 +373,17 @@ const ProjectLobby: React.FC = () => {
 
   const handleOpenCreate = () => {
     form.resetFields()
-    const defaultVisual: ProjectVisualStyleChoice = '现实'
-    const defaultStyle = PROJECT_STYLE_OPTIONS_BY_VISUAL[defaultVisual][0]?.value
+    const defaultVisual = (projectStyleOptions.visualStyles[0]?.value ?? '现实') as ProjectVisualStyleChoice
+    const defaultStyle =
+      projectStyleOptions.defaultStyleByVisual?.[defaultVisual] ??
+      projectStyleOptions.stylesByVisual[defaultVisual]?.[0]?.value
     form.setFieldsValue({
       visual_style: defaultVisual,
       style: defaultStyle,
       seed: Math.floor(Math.random() * 99999),
       unifyStyle: true,
+      default_video_size: defaultVideoSize,
+      default_video_ratio: defaultVideoRatio,
     })
     setCreateModalOpen(true)
   }
@@ -376,6 +395,8 @@ const ProjectLobby: React.FC = () => {
     visual_style: ProjectVisualStyleChoice
     seed: number
     unifyStyle: boolean
+    default_video_size?: string
+    default_video_ratio?: string
   }) => {
     try {
       const createdId = newProjectId()
@@ -388,6 +409,8 @@ const ProjectLobby: React.FC = () => {
           visual_style: values.visual_style as any,
           seed: values.seed,
           unify_style: values.unifyStyle,
+          default_video_size: values.default_video_size || null,
+          default_video_ratio: values.default_video_ratio || null,
           progress: 0,
         },
       })
@@ -403,15 +426,18 @@ const ProjectLobby: React.FC = () => {
     }
   }
 
-  const handleOpenEdit = (e: React.MouseEvent, p: Project) => {
+  const handleOpenEdit = (e: React.MouseEvent, p: ProjectView) => {
     e.stopPropagation()
     setEditingProject(p)
     editForm.setFieldsValue({
       name: p.name,
       description: p.description,
       style: p.style,
+      visual_style: p.visualStyle ?? '现实',
       seed: p.seed,
       unifyStyle: p.unifyStyle,
+      default_video_size: p.defaultVideoSize ?? undefined,
+      default_video_ratio: p.defaultVideoRatio ?? undefined,
     })
     setEditModalOpen(true)
   }
@@ -420,8 +446,11 @@ const ProjectLobby: React.FC = () => {
     name: string
     description?: string
     style: string
+    visual_style: ProjectVisualStyleChoice
     seed: number
     unifyStyle: boolean
+    default_video_size?: string
+    default_video_ratio?: string
   }) => {
     if (!editingProject) return
     try {
@@ -431,8 +460,11 @@ const ProjectLobby: React.FC = () => {
           name: values.name,
           description: values.description ?? '',
           style: values.style as ProjectStyle,
+          visual_style: values.visual_style as any,
           seed: values.seed,
           unify_style: values.unifyStyle,
+          default_video_size: values.default_video_size || null,
+          default_video_ratio: values.default_video_ratio || null,
         },
       })
       const updated = res.data
@@ -459,14 +491,14 @@ const ProjectLobby: React.FC = () => {
     }
   }
 
-  const renderStatusTag = (p: Project) => {
+  const renderStatusTag = (p: ProjectView) => {
     const status = getProjectStatus(p)
     if (status === 'completed') return <Tag color="green" className="mr-0 text-[11px] leading-4">已完成</Tag>
     if (status === 'draft') return <Tag color="default" className="mr-0 text-[11px] leading-4">草稿</Tag>
     return <Tag color="orange" className="mr-0 text-[11px] leading-4">进行中</Tag>
   }
 
-  const handlePrimaryAction = (project: Project, stageSummary?: ProjectStageSummary) => {
+  const handlePrimaryAction = (project: ProjectView, stageSummary?: ProjectStageSummary) => {
     if (!stageSummary) {
       navigate(`/projects/${project.id}`)
       return
@@ -524,7 +556,7 @@ const ProjectLobby: React.FC = () => {
 
   const selectedProject = filteredSorted.find((p) => p.id === selectedProjectId) ?? filteredSorted[0]
 
-  const renderCard = (p: Project) => {
+  const renderCard = (p: ProjectView) => {
     const status = getProjectStatus(p)
     const stageSummary = projectStageMap[p.id]
     const flowStats = projectFlowStatsMap[p.id]
@@ -943,10 +975,15 @@ const ProjectLobby: React.FC = () => {
           layout="vertical"
           onFinish={handleCreateSubmit}
           initialValues={{
-            visual_style: '现实',
-            style: '真人都市',
+            visual_style: projectStyleOptions.visualStyles[0]?.value ?? '现实',
+            style:
+              projectStyleOptions.defaultStyleByVisual?.[projectStyleOptions.visualStyles[0]?.value ?? '现实'] ??
+              projectStyleOptions.stylesByVisual[projectStyleOptions.visualStyles[0]?.value ?? '现实']?.[0]?.value ??
+              '真人都市',
             seed: Math.floor(Math.random() * 99999),
             unifyStyle: true,
+            default_video_size: defaultVideoSize,
+            default_video_ratio: defaultVideoRatio,
           }}
         >
           <Form.Item
@@ -959,13 +996,19 @@ const ProjectLobby: React.FC = () => {
           <Form.Item name="description" label="项目简介（选填）">
             <Input.TextArea rows={4} placeholder="项目简介与风格说明，建议 80–120 字" />
           </Form.Item>
-          <ProjectVisualStyleAndStyleFields form={form} />
+          <ProjectVisualStyleAndStyleFields form={form} options={projectStyleOptions} />
           <Form.Item
             name="seed"
             label="全局种子值"
             tooltip="固定种子可确保整部短剧视觉调性一致"
           >
             <InputNumber min={0} className="w-full" />
+          </Form.Item>
+          <Form.Item name="default_video_size" label="默认视频尺寸">
+            <Select allowClear placeholder="未设置时由模型/供应商决定" options={videoSizeOptions} />
+          </Form.Item>
+          <Form.Item name="default_video_ratio" label="默认视频比例">
+            <Select allowClear placeholder="未设置时由模型/供应商决定" options={videoRatioOptions} />
           </Form.Item>
           <Form.Item
             name="unifyStyle"
@@ -997,7 +1040,7 @@ const ProjectLobby: React.FC = () => {
           form={editForm}
           layout="vertical"
           onFinish={handleEditSubmit}
-          initialValues={{ style: '现实主义', unifyStyle: true }}
+          initialValues={{ style: '真人都市', visual_style: '现实', unifyStyle: true }}
         >
           <Form.Item name="name" label="项目名称" rules={[{ required: true, message: '请输入项目名称' }]}>
             <Input placeholder="项目名称" />
@@ -1005,15 +1048,15 @@ const ProjectLobby: React.FC = () => {
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={3} placeholder="项目简介与风格说明" />
           </Form.Item>
-          <Form.Item name="style" label="视频风格" rules={[{ required: true }]}>
-            <Select
-              options={[
-                { value: '现实主义', label: '现实主义' },
-              ]}
-            />
-          </Form.Item>
+          <ProjectVisualStyleAndStyleFields form={editForm} options={projectStyleOptions} />
           <Form.Item name="seed" label="全局种子值" tooltip="固定种子可确保整部短剧视觉调性一致">
             <InputNumber min={0} className="w-full" />
+          </Form.Item>
+          <Form.Item name="default_video_size" label="默认视频尺寸">
+            <Select allowClear placeholder="未设置时由模型/供应商决定" options={videoSizeOptions} />
+          </Form.Item>
+          <Form.Item name="default_video_ratio" label="默认视频比例">
+            <Select allowClear placeholder="未设置时由模型/供应商决定" options={videoRatioOptions} />
           </Form.Item>
           <Form.Item name="unifyStyle" label="风格统一" valuePropName="checked" tooltip="开启后所有章节继承项目风格">
             <Switch />

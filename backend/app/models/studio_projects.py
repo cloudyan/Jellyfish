@@ -36,6 +36,18 @@ class Project(Base, TimestampMixin):
     seed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="随机种子")
     unify_style: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, comment="是否统一风格（跨章节）")
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="进度百分比（0-100）")
+    default_video_size: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        default=None,
+        comment="项目级默认视频尺寸（可为空；分镜未覆盖时使用）",
+    )
+    default_video_ratio: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+        default=None,
+        comment="项目级默认视频比例（可为空；分镜未覆盖时使用）",
+    )
     stats: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, comment="聚合统计（JSON）")
 
     chapters: Mapped[list["Chapter"]] = relationship(

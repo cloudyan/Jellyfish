@@ -26,5 +26,9 @@ export type VideoGenerationTaskRequest = {
      * 分辨率（可选），如 720x1280
      */
     size?: (string | null);
+    /**
+     * 画幅比例（可选），如 16:9 / 9:16
+     */
+    ratio?: (string | null);
 };
 

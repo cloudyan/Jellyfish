@@ -12,10 +12,10 @@ import { resolveAssetUrl } from '../../../assets/utils'
 import { DisplayImageCard } from '../../../assets/components/DisplayImageCard'
 import { StudioEntitiesApi } from '../../../../../services/studioEntities'
 import {
-  PROJECT_STYLE_OPTIONS_BY_VISUAL,
   ProjectVisualStyleAndStyleFields,
   type ProjectVisualStyleChoice,
 } from '../../../project/ProjectVisualStyleAndStyleFields'
+import { useProjectStyleOptions } from '../../../project/useProjectStyleOptions'
 
 type ActorLike = {
   id: string
@@ -57,6 +57,7 @@ function notifyShotAssetCreatedAndLinked(payload: {
 }
 
 export function RolesTab() {
+  const { options: projectStyleOptions, defaultVisualStyle, getDefaultStyle } = useProjectStyleOptions()
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -76,10 +77,10 @@ export function RolesTab() {
   const [actorsById, setActorsById] = useState<Record<string, ActorLike>>({})
   const [costumesById, setCostumesById] = useState<Record<string, CostumeLike>>({})
   const [loadingLinks, setLoadingLinks] = useState(false)
-  const [projectVisualStyle, setProjectVisualStyle] = useState<ProjectVisualStyleChoice>('现实')
-  const [projectStyle, setProjectStyle] = useState<string>(PROJECT_STYLE_OPTIONS_BY_VISUAL['现实'][0]?.value ?? '真人都市')
-  const [formVisualStyle, setFormVisualStyle] = useState<ProjectVisualStyleChoice>('现实')
-  const [formStyle, setFormStyle] = useState<string>(PROJECT_STYLE_OPTIONS_BY_VISUAL['现实'][0]?.value ?? '真人都市')
+  const [projectVisualStyle, setProjectVisualStyle] = useState<ProjectVisualStyleChoice>(defaultVisualStyle as ProjectVisualStyleChoice)
+  const [projectStyle, setProjectStyle] = useState<string>(getDefaultStyle(defaultVisualStyle))
+  const [formVisualStyle, setFormVisualStyle] = useState<ProjectVisualStyleChoice>(defaultVisualStyle as ProjectVisualStyleChoice)
+  const [formStyle, setFormStyle] = useState<string>(getDefaultStyle(defaultVisualStyle))
 
   useEffect(() => {
     const create = searchParams.get('create')
@@ -95,7 +96,7 @@ export function RolesTab() {
       setFormCostumeId(undefined)
       const nextVisual = visualStyle || projectVisualStyle
       setFormVisualStyle(nextVisual)
-      setFormStyle(style || projectStyle || (PROJECT_STYLE_OPTIONS_BY_VISUAL[nextVisual]?.[0]?.value ?? '真人都市'))
+      setFormStyle(style || projectStyle || getDefaultStyle(nextVisual))
       const shotIdFromUrl = searchParams.get('shotId')?.trim() ?? ''
       const chapterIdFromUrl = searchParams.get('chapterId')?.trim() ?? ''
       setPendingShotLinkShotId(shotIdFromUrl || null)
@@ -116,7 +117,7 @@ export function RolesTab() {
         { replace: true },
       )
     }
-  }, [projectStyle, projectVisualStyle, searchParams, setSearchParams])
+  }, [getDefaultStyle, projectStyle, projectVisualStyle, searchParams, setSearchParams])
 
   const openNormalRoleCreate = useCallback(() => {
     setPendingShotLinkShotId(null)
@@ -214,15 +215,15 @@ export function RolesTab() {
     void (async () => {
       try {
         const res = await StudioProjectsService.getProjectApiV1StudioProjectsProjectIdGet({ projectId })
-        const nextVisual = (res.data?.visual_style as ProjectVisualStyleChoice | undefined) ?? '现实'
-        const nextStyle = (res.data?.style as string | undefined) ?? PROJECT_STYLE_OPTIONS_BY_VISUAL[nextVisual]?.[0]?.value ?? '真人都市'
+        const nextVisual = (res.data?.visual_style as ProjectVisualStyleChoice | undefined) ?? (defaultVisualStyle as ProjectVisualStyleChoice)
+        const nextStyle = (res.data?.style as string | undefined) ?? getDefaultStyle(nextVisual)
         setProjectVisualStyle(nextVisual)
         setProjectStyle(nextStyle)
       } catch {
         // ignore: fallback to default
       }
     })()
-  }, [projectId])
+  }, [defaultVisualStyle, getDefaultStyle, projectId])
 
   const handleCreateRole = async () => {
     if (!projectId) return
@@ -460,6 +461,7 @@ export function RolesTab() {
             <ProjectVisualStyleAndStyleFields
               visual_style={formVisualStyle}
               style={formStyle}
+              options={projectStyleOptions}
               onChange={(next) => {
                 setFormVisualStyle(next.visual_style)
                 setFormStyle(next.style)

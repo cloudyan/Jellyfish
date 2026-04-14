@@ -5,12 +5,24 @@
 import type { ApiResponse_NoneType_ } from '../models/ApiResponse_NoneType_';
 import type { ApiResponse_PaginatedData_ProjectRead__ } from '../models/ApiResponse_PaginatedData_ProjectRead__';
 import type { ApiResponse_ProjectRead_ } from '../models/ApiResponse_ProjectRead_';
+import type { ApiResponse_ProjectStyleOptionsRead_ } from '../models/ApiResponse_ProjectStyleOptionsRead_';
 import type { ProjectCreate } from '../models/ProjectCreate';
 import type { ProjectUpdate } from '../models/ProjectUpdate';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class StudioProjectsService {
+    /**
+     * 获取项目风格与视频参数候选项
+     * @returns ApiResponse_ProjectStyleOptionsRead_ Successful Response
+     * @throws ApiError
+     */
+    public static getProjectStyleOptionsApiV1StudioProjectsStyleOptionsGet(): CancelablePromise<ApiResponse_ProjectStyleOptionsRead_> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/studio/projects/style-options',
+        });
+    }
     /**
      * 项目列表（分页）
      * @returns ApiResponse_PaginatedData_ProjectRead__ Successful Response

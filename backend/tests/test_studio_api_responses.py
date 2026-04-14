@@ -173,6 +173,44 @@ def test_create_project_returns_created_envelope(client: TestClient) -> None:
     assert body["data"]["name"] == "新项目"
 
 
+def test_project_style_options_returns_grouped_choices(client: TestClient) -> None:
+    response = client.get("/api/v1/studio/projects/style-options")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == 200
+    assert "视觉" in body["data"]["visual_styles"][0]["label"] or body["data"]["visual_styles"][0]["value"] in {"现实", "动漫"}
+    assert "现实" in body["data"]["styles_by_visual_style"]
+    assert "动漫" in body["data"]["styles_by_visual_style"]
+    assert "16:9" in [item["value"] for item in body["data"]["video_ratios"]]
+    assert body["data"]["default_video_ratio"] == "16:9"
+    assert body["data"]["default_video_size"] == "1920x1080"
+
+
+def test_create_project_rejects_invalid_style_combo(client: TestClient) -> None:
+    db = _FakeStudioDB()
+    app.dependency_overrides[get_db] = _override_db(db)
+    try:
+        response = client.post(
+            "/api/v1/studio/projects",
+            json={
+                "id": "proj-invalid-style",
+                "name": "新项目",
+                "description": "说明",
+                "style": "真人都市",
+                "visual_style": "动漫",
+                "seed": 1,
+                "unify_style": True,
+                "progress": 0,
+                "stats": {},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "style is not allowed for visual_style" in response.json()["message"]
+
+
 def test_get_project_not_found_returns_api_response(client: TestClient) -> None:
     db = _FakeStudioDB()
     app.dependency_overrides[get_db] = _override_db(db)

@@ -57,29 +57,15 @@ async def get_model_by_category(
                 ) from e
             raise
 
-    if not allow_default_fallback:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"No default model configured for category={category.value}",
-        )
-
-    stmt = (
-        select(Model)
-        .where(Model.category == category, Model.is_default.is_(True))
-        .order_by(Model.updated_at.desc())
-        .limit(1)
+    _ = allow_default_fallback  # 保留参数签名兼容，默认模型来源统一为 ModelSettings。
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"No default model configured for category={category.value}",
     )
-    model = (await db.execute(stmt)).scalars().first()
-    if model is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"No default model configured for category={category.value}",
-        )
-    return model
 
 
 async def get_default_model_by_category(db: AsyncSession, category: ModelCategoryKey) -> Model:
-    """按类别解析默认模型，优先读取单例 ModelSettings，缺失时回退 is_default。"""
+    """按类别解析默认模型，仅从单例 ModelSettings 读取。"""
     return await get_model_by_category(db, category, allow_default_fallback=True)
 
 
@@ -126,7 +112,7 @@ async def build_chat_model_from_provider(
     stmt = (
         select(Model)
         .where(Model.provider_id == provider.id, Model.category == ModelCategoryKey.text)
-        .order_by(Model.is_default.desc(), Model.updated_at.desc())
+        .order_by(Model.updated_at.desc())
         .limit(1)
     )
     model = (await db.execute(stmt)).scalars().first()

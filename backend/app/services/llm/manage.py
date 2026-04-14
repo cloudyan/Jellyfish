@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.utils import apply_keyword_filter, apply_order, paginate
@@ -185,9 +185,6 @@ async def create_model(
         status_code=400,
     )
     _ensure_provider_supports_category(provider=provider, category=body.category)
-    if body.is_default:
-        await db.execute(update(Model).where(Model.category == body.category).values(is_default=False))
-        await db.flush()
     return await create_and_refresh(
         db,
         Model(
@@ -197,7 +194,6 @@ async def create_model(
             provider_id=body.provider_id,
             params=body.params,
             description=body.description,
-            is_default=body.is_default,
             created_by=body.created_by,
         ),
     )
@@ -239,9 +235,6 @@ async def update_model(
         status_code=400,
     )
     _ensure_provider_supports_category(provider=target_provider, category=target_category)
-    if update_data.get("is_default") is True:
-        await db.execute(update(Model).where(Model.category == target_category).values(is_default=False))
-        await db.flush()
     patch_model(model, update_data)
     return await flush_and_refresh(db, model)
 

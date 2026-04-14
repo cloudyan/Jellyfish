@@ -27,7 +27,7 @@ async def _build_session() -> tuple[AsyncSession, object]:
 
 
 @pytest.mark.asyncio
-async def test_create_model_clears_previous_default_in_same_category() -> None:
+async def test_create_model_persists_with_non_default_flag() -> None:
     db, engine = await _build_session()
     async with db:
         await create_provider(
@@ -39,81 +39,41 @@ async def test_create_model_clears_previous_default_in_same_category() -> None:
                 api_key="k",
             ),
         )
-        await create_model(
+        created = await create_model(
             db,
             body=ModelCreate(
                 id="m1",
                 name="gpt-4o-mini",
                 category=ModelCategoryKey.text,
                 provider_id="p1",
-                is_default=True,
             ),
         )
-        await create_model(
-            db,
-            body=ModelCreate(
-                id="m2",
-                name="gpt-4.1-mini",
-                category=ModelCategoryKey.text,
-                provider_id="p1",
-                is_default=True,
-            ),
-        )
-
-        first_model = await db.get(Model, "m1")
-        second_model = await db.get(Model, "m2")
-        assert first_model is not None and first_model.is_default is False
-        assert second_model is not None and second_model.is_default is True
+        assert created.id == "m1"
     await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_update_model_uses_target_category_when_setting_default() -> None:
+async def test_update_model_allows_regular_field_updates() -> None:
     db, engine = await _build_session()
     async with db:
         provider = Provider(id="p1", name="OpenAI", base_url="https://api.openai.com/v1", api_key="k")
         db.add(provider)
-        db.add_all(
-            [
-                Model(
-                    id="m_text",
-                    name="gpt-4o-mini",
-                    category=ModelCategoryKey.text,
-                    provider_id="p1",
-                    is_default=False,
-                ),
-                Model(
-                    id="m_image_old_default",
-                    name="gpt-image-1",
-                    category=ModelCategoryKey.image,
-                    provider_id="p1",
-                    is_default=True,
-                ),
-                Model(
-                    id="m_image_candidate",
-                    name="seedream",
-                    category=ModelCategoryKey.text,
-                    provider_id="p1",
-                    is_default=False,
-                ),
-            ]
+        db.add(
+            Model(
+                id="m_text",
+                name="gpt-4o-mini",
+                category=ModelCategoryKey.text,
+                provider_id="p1",
+            )
         )
         await db.commit()
 
         updated = await update_model(
             db,
-            model_id="m_image_candidate",
-            body=ModelUpdate(category=ModelCategoryKey.image, is_default=True),
+            model_id="m_text",
+            body=ModelUpdate(description="updated"),
         )
-
-        old_default = await db.get(Model, "m_image_old_default")
-        candidate = await db.get(Model, "m_image_candidate")
-        text_model = await db.get(Model, "m_text")
-
-        assert updated.category == ModelCategoryKey.image
-        assert old_default is not None and old_default.is_default is False
-        assert candidate is not None and candidate.is_default is True
-        assert text_model is not None and text_model.is_default is False
+        assert updated.description == "updated"
     await engine.dispose()
 
 

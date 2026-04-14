@@ -14,7 +14,6 @@ import {
   Modal,
   Form,
   Select,
-  Switch,
   message,
   Tooltip,
   Empty,
@@ -25,8 +24,6 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  StarOutlined,
-  StarFilled,
   CopyOutlined,
   MenuOutlined,
   AppstoreOutlined,
@@ -198,7 +195,6 @@ export default function ModelsTab() {
             provider_id: values.provider_id,
             description: values.description ?? null,
             params,
-            is_default: values.is_default,
           },
         })
         message.success('模型已更新')
@@ -211,7 +207,6 @@ export default function ModelsTab() {
           typeof crypto !== 'undefined' && crypto.randomUUID
             ? crypto.randomUUID()
             : `model_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
-        const isDefault = values.is_default === true
         await LlmService.createModelApiV1LlmModelsPost({
           requestBody: {
             id: modelId,
@@ -220,7 +215,6 @@ export default function ModelsTab() {
             provider_id: values.provider_id,
             description: values.description,
             params,
-            is_default: isDefault,
           },
         })
         message.success('模型已添加')
@@ -233,22 +227,6 @@ export default function ModelsTab() {
       if (e && typeof e === 'object' && 'errorFields' in e) return
       message.error('保存失败')
     }
-  }
-
-  const handleSetDefaultModel = (model: ModelRead) => {
-    Modal.confirm({
-      title: '设为默认',
-      content: '此操作将替换当前该类别的默认模型。',
-      onOk: async () => {
-        await LlmService.updateModelApiV1LlmModelsModelIdPatch({
-          modelId: model.id,
-          requestBody: { is_default: true },
-        })
-        message.success('已设为默认')
-        void load()
-        if (selectedModel?.id === model.id) setSelectedModel({ ...model, is_default: true })
-      },
-    })
   }
 
   const handleDeleteModel = (m: ModelRead) => {
@@ -275,11 +253,10 @@ export default function ModelsTab() {
         provider_id: m.provider_id,
         description: m.description,
         params: JSON.stringify(m.params ?? {}, null, 2),
-        is_default: m.is_default ?? false,
       })
     } else {
       form.resetFields()
-      form.setFieldsValue({ category: 'text', is_default: false })
+      form.setFieldsValue({ category: 'text' })
     }
     setModelModalOpen(true)
   }
@@ -290,12 +267,7 @@ export default function ModelsTab() {
       dataIndex: 'name',
       key: 'name',
       ellipsis: true,
-      render: (n, r) => (
-        <Space>
-          {r.is_default && <StarFilled style={{ color: '#faad14' }} />}
-          {n}
-        </Space>
-      ),
+      render: (n) => <Space>{n}</Space>,
     },
     {
       title: '类别',
@@ -332,21 +304,6 @@ export default function ModelsTab() {
       key: 'description',
       ellipsis: true,
       render: (d: string) => <Tooltip title={d}>{d || '—'}</Tooltip>,
-    },
-    {
-      title: '默认',
-      dataIndex: 'is_default',
-      key: 'is_default',
-      width: 70,
-      render: (isDefault: boolean, record) =>
-        isDefault ? (
-          <StarFilled style={{ color: '#faad14' }} />
-        ) : (
-          <StarOutlined
-            className="text-gray-400 hover:text-amber-500 cursor-pointer"
-            onClick={() => handleSetDefaultModel(record)}
-          />
-        ),
     },
     {
       title: '创建人',
@@ -555,7 +512,6 @@ export default function ModelsTab() {
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <Tag color={categoryColorMap[m.category]}>{categoryLabelMap[m.category]}</Tag>
-                    {m.is_default && <StarFilled style={{ color: '#faad14' }} />}
                   </div>
                   <div className="font-medium mb-1">{m.name}</div>
                   <div className="text-gray-500 text-sm mb-1">
@@ -710,14 +666,6 @@ export default function ModelsTab() {
           </Form.Item>
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item
-            name="is_default"
-            label="设为该类别默认"
-            valuePropName="checked"
-            initialValue={false}
-          >
-            <Switch />
           </Form.Item>
         </Form>
       </Modal>

@@ -27,9 +27,5 @@ export type ModelUpdate = {
      * 说明
      */
     description?: (string | null);
-    /**
-     * 是否默认
-     */
-    is_default?: (boolean | null);
 };
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Form, Select, InputNumber, Button, message } from 'antd'
+import { Alert, Card, Form, Select, InputNumber, Button, message } from 'antd'
 import { LlmService } from '../../../services/generated/services/LlmService'
 import type { ModelRead, ModelSettingsRead } from '../../../services/generated'
 
@@ -71,6 +71,12 @@ export default function SettingsTab() {
   return (
     <div className="flex-1 overflow-auto p-6 bg-gray-50">
       <Card title="全局默认模型与参数" className="max-w-2xl" loading={loading}>
+        <Alert
+          type="info"
+          showIcon
+          className="mb-4"
+          message="默认模型仅在本页面统一维护，模型列表页不再提供“设为默认”操作。"
+        />
         <Form form={form} layout="vertical" onFinish={handleSaveSettings}>
           <Form.Item name="default_text_model_id" label="默认文本生成模型">
             <Select

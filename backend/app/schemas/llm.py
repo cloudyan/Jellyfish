@@ -80,7 +80,6 @@ class ModelBase(BaseModel):
     provider_id: str = Field(..., description="所属供应商 ID")
     params: dict[str, Any] = Field(default_factory=dict, description="模型参数（JSON）")
     description: str = Field("", description="说明")
-    is_default: bool = Field(False, description="是否默认")
     created_by: str = Field("", description="创建人")
 
 
@@ -98,7 +97,6 @@ class ModelUpdate(BaseModel):
     provider_id: str | None = Field(None, description="所属供应商 ID")
     params: dict[str, Any] | None = Field(None, description="模型参数（JSON）")
     description: str | None = Field(None, description="说明")
-    is_default: bool | None = Field(None, description="是否默认")
 
 
 class ModelRead(ModelBase):

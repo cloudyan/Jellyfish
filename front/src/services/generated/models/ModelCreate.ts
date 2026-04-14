@@ -28,10 +28,6 @@ export type ModelCreate = {
      */
     description?: string;
     /**
-     * 是否默认
-     */
-    is_default?: boolean;
-    /**
      * 创建人
      */
     created_by?: string;

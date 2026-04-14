@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -115,7 +115,6 @@ class Model(Base, TimestampMixin):
     )
     params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, comment="模型参数（JSON）")
     description: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="说明")
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="是否默认")
     created_by: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="创建人")
 
     provider: Mapped["Provider"] = relationship(back_populates="models")

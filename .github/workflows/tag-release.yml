@@ -22,10 +22,23 @@ jobs:
         id: meta
         run: |
           commit_subject="$(git log -1 --pretty=%s "$GITHUB_SHA")"
+          tag_type="$(git cat-file -t "$GITHUB_REF_NAME" 2>/dev/null || true)"
+          if [ "$tag_type" = "tag" ]; then
+            # 优先使用注释标签的 message（即 git tag -m 内容）作为发布摘要
+            release_summary="$(git for-each-ref --format='%(contents)' "refs/tags/$GITHUB_REF_NAME")"
+          else
+            release_summary=""
+          fi
+          if [ -z "$(printf '%s' "$release_summary" | tr -d '[:space:]')" ]; then
+            release_summary="$commit_subject"
+          fi
           previous_tag="$(git tag --sort=-creatordate | grep -Fxv "$GITHUB_REF_NAME" | head -n 1 || true)"
           {
             echo "commit_subject<<EOF"
             echo "$commit_subject"
+            echo "EOF"
+            echo "release_summary<<EOF"
+            echo "$release_summary"
             echo "EOF"
             echo "previous_tag=${previous_tag}"
           } >> "$GITHUB_OUTPUT"
@@ -139,7 +152,7 @@ jobs:
         id: body
         env:
           TAG_NAME: ${{ github.ref_name }}
-          COMMIT_SUBJECT: ${{ steps.meta.outputs.commit_subject }}
+          RELEASE_SUMMARY: ${{ steps.meta.outputs.release_summary }}
           FEATURES: ${{ steps.changelog.outputs.features }}
           IMPROVEMENTS: ${{ steps.changelog.outputs.improvements }}
           BUGFIXES: ${{ steps.changelog.outputs.bugfixes }}
@@ -151,7 +164,7 @@ jobs:
 
           ## 发布摘要
 
-          ${COMMIT_SUBJECT}
+          ${RELEASE_SUMMARY}
 
           ## Changelog
 

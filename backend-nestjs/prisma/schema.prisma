@@ -1,0 +1,543 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  // url 字段已移除，由 prisma.config.ts 注入
+}
+
+// 枚举类型
+enum ModelCategoryKey {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+
+  @@map("model_category_key")
+}
+
+enum ProjectStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+
+  @@map("project_status")
+}
+
+enum ChapterStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+
+  @@map("chapter_status")
+}
+
+enum ShotStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+
+  @@map("shot_status")
+}
+
+enum TaskType {
+  SCRIPT_DIVIDE
+  EXTRACT_ENTITIES
+  GENERATE_IMAGE
+  GENERATE_VIDEO
+  GENERATE_AUDIO
+
+  @@map("task_type")
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+
+  @@map("task_status")
+}
+
+// 1. LLM 管理模块 - Provider
+model Provider {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  displayName String   @map("display_name")
+  baseUrl     String?  @map("base_url")
+  apiKey      String?  @map("api_key") // 加密存储
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  models Model[]
+
+  @@map("providers")
+}
+
+// 2. LLM 管理模块 - Model
+model Model {
+  id          String   @id @default(cuid())
+  providerId  String   @map("provider_id")
+  modelId     String   @map("model_id") // 如: gpt-4, claude-3-opus
+  displayName String   @map("display_name")
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  category    ModelCategoryKey? @map("category")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  provider      Provider       @relation(fields: [providerId], references: [id])
+  modelSettings ModelSetting[]
+
+  @@unique([providerId, modelId])
+  @@map("models")
+}
+
+// 3. LLM 管理模块 - ModelSetting
+model ModelSetting {
+  id           String   @id @default(cuid())
+  modelId      String   @map("model_id")
+  temperature  Float    @default(0.7)
+  maxTokens    Int?     @map("max_tokens")
+  topP         Float?   @map("top_p")
+  frequencyPenalty Float? @map("frequency_penalty")
+  presencePenalty  Float? @map("presence_penalty")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  model Model @relation(fields: [modelId], references: [id])
+
+  @@map("model_settings")
+}
+
+// 4. Studio 核心模块 - Project
+model Project {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      ProjectStatus @default(DRAFT)
+  coverImage  String?  @map("cover_image")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  chapters  Chapter[]
+  characters Character[]
+  actors     Actor[] @relation("ProjectActorLink")
+  scenes     Scene[] @relation("ProjectSceneLink")
+  props      Prop[] @relation("ProjectPropLink")
+  costumes   Costume[] @relation("ProjectCostumeLink")
+  timelines  StudioTimeline[]
+
+  @@map("projects")
+}
+
+// 5. Studio 核心模块 - Chapter
+model Chapter {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  chapterNumber Int    @map("chapter_number")
+  title       String?
+  content     String?  @db.Text
+  status      ChapterStatus @default(DRAFT)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+  shots   Shot[]
+
+  @@unique([projectId, chapterNumber])
+  @@map("chapters")
+}
+
+// 6. Studio 核心模块 - Shot
+model Shot {
+  id          String   @id @default(cuid())
+  chapterId   String   @map("chapter_id")
+  shotNumber  String   @map("shot_number") // 如: 1.1, 1.2
+  content     String?  @db.Text
+  sceneId     String?  @map("scene_id")
+  status      ShotStatus @default(DRAFT)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  chapter    Chapter             @relation(fields: [chapterId], references: [id])
+  scene      Scene?              @relation(fields: [sceneId], references: [id])
+  detail     ShotDetail?
+  dialogLines ShotDialogLine[]
+  frameImages ShotFrameImage[]
+  candidates ShotExtractedCandidate[]
+
+  @@unique([chapterId, shotNumber])
+  @@index([chapterId, shotNumber])
+  @@index([status])
+  @@map("shots")
+}
+
+// 7. Studio 核心模块 - ShotDetail
+model ShotDetail {
+  id              String  @id @default(cuid())
+  shotId          String  @unique @map("shot_id")
+  sceneTitle      String? @map("scene_title")
+  sceneType       String? @map("scene_type")
+  timeLocation    String? @map("time_location")
+  atmosphere      String?
+  cameraMovement  String? @map("camera_movement")
+  cameraAngle     String? @map("camera_angle")
+  lensInfo        String? @map("lens_info")
+  visualEffects   String? @map("visual_effects") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  shot Shot @relation(fields: [shotId], references: [id])
+
+  @@map("shot_details")
+}
+
+// 8. Studio 核心模块 - ShotDialogLine
+model ShotDialogLine {
+  id          String  @id @default(cuid())
+  shotId      String  @map("shot_id")
+  characterId String? @map("character_id")
+  lineNumber  Int     @map("line_number")
+  content     String  @db.Text
+  emotion     String?
+  action      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  shot      Shot      @relation(fields: [shotId], references: [id])
+  character Character? @relation(fields: [characterId], references: [id])
+
+  @@index([shotId, lineNumber])
+  @@map("shot_dialog_lines")
+}
+
+// 9. 资产模型 - Character
+model Character {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  name        String
+  description String?  @db.Text
+  personality String?  @db.Text
+  appearance  String?  @db.Text // JSON 格式
+  actorId     String?  @map("actor_id")
+  costumeId   String?  @map("costume_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project     Project          @relation(fields: [projectId], references: [id])
+  actor       Actor?           @relation(fields: [actorId], references: [id])
+  costume     Costume?         @relation(fields: [costumeId], references: [id])
+  dialogLines ShotDialogLine[]
+  images      CharacterImage[]
+
+  @@map("characters")
+}
+
+// 10. 资产模型 - Actor
+model Actor {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  characters Character[]
+  projects   Project[] @relation("ProjectActorLink")
+
+  @@map("actors")
+}
+
+// 11. 资产模型 - Scene
+model Scene {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  name        String
+  description String?  @db.Text
+  location    String?
+  timeOfDay   String?  @map("time_of_day")
+  props       String?  // JSON 格式
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+  projects Project[] @relation("ProjectSceneLink")
+  shots   Shot[]
+
+  @@map("scenes")
+}
+
+// 12. 资产模型 - Prop
+model Prop {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  type        String?  // 道具类型: 武器, 家具, 装饰品等
+  imageUrl    String?  @map("image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  projects Project[] @relation("ProjectPropLink")
+
+  @@map("props")
+}
+
+// 13. 资产模型 - Costume
+model Costume {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  style       String?  // 服装风格
+  imageUrl    String?  @map("image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  characters Character[]
+  projects   Project[] @relation("ProjectCostumeLink")
+
+  @@map("costumes")
+}
+
+// 14. 资产模型 - ShotExtractedCandidate
+model ShotExtractedCandidate {
+  id          String   @id @default(cuid())
+  shotId      String   @map("shot_id")
+  entityType  String   @map("entity_type") // character, prop, scene, costume
+  entityName  String   @map("entity_name")
+  confidence  Float    // 置信度 0-1
+  isSelected  Boolean  @default(false) @map("is_selected")
+  metadata    String?  // JSON 格式，提取的额外信息
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  shot Shot @relation(fields: [shotId], references: [id])
+
+  @@map("shot_extracted_candidates")
+}
+
+// 15. 多对多关联表 - ProjectActorLink
+model ProjectActorLink {
+  projectId String @map("project_id")
+  actorId   String @map("actor_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation("ProjectActorLink", fields: [projectId], references: [id])
+  actor   Actor   @relation("ProjectActorLink", fields: [actorId], references: [id])
+
+  @@id([projectId, actorId])
+  @@map("project_actor_links")
+}
+
+// 16. 多对多关联表 - ProjectSceneLink
+model ProjectSceneLink {
+  projectId String @map("project_id")
+  sceneId   String @map("scene_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation("ProjectSceneLink", fields: [projectId], references: [id])
+  scene   Scene   @relation("ProjectSceneLink", fields: [sceneId], references: [id])
+
+  @@id([projectId, sceneId])
+  @@map("project_scene_links")
+}
+
+// 17. 多对多关联表 - ProjectPropLink
+model ProjectPropLink {
+  projectId String @map("project_id")
+  propId    String @map("prop_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation("ProjectPropLink", fields: [projectId], references: [id])
+  prop    Prop    @relation("ProjectPropLink", fields: [propId], references: [id])
+
+  @@id([projectId, propId])
+  @@map("project_prop_links")
+}
+
+// 18. 多对多关联表 - ProjectCostumeLink
+model ProjectCostumeLink {
+  projectId  String  @map("project_id")
+  costumeId  String  @map("costume_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  project Project  @relation("ProjectCostumeLink", fields: [projectId], references: [id])
+  costume Costume  @relation("ProjectCostumeLink", fields: [costumeId], references: [id])
+
+  @@id([projectId, costumeId])
+  @@map("project_costume_links")
+}
+
+// 19. 文件与任务 - AssetImage
+model AssetImage {
+  id          String   @id @default(cuid())
+  entityType  String   @map("entity_type") // character, scene, prop, etc.
+  entityId    String   @map("entity_id")
+  imageType   String   @map("image_type") // portrait, full_body, etc.
+  imageUrl    String   @map("image_url")
+  prompt      String?  @db.Text
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  metadata    String?  // JSON 格式
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([entityType, entityId])
+  @@index([isPrimary])
+  @@map("asset_images")
+}
+
+// 20. 文件与任务 - CharacterImage
+model CharacterImage {
+  id          String   @id @default(cuid())
+  characterId String   @map("character_id")
+  imageUrl    String   @map("image_url")
+  prompt      String?  @db.Text
+  imageType   String   @default("portrait") @map("image_type")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@map("character_images")
+}
+
+// 21. 文件与任务 - ShotFrameImage
+model ShotFrameImage {
+  id          String   @id @default(cuid())
+  shotId      String   @map("shot_id")
+  imageUrl    String   @map("image_url")
+  prompt      String?  @db.Text
+  frameIndex  Int      @map("frame_index")
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  shot Shot @relation(fields: [shotId], references: [id])
+
+  @@map("shot_frame_images")
+}
+
+// 22. 文件与任务 - FileUsage
+model FileUsage {
+  id          String   @id @default(cuid())
+  filePath    String   @map("file_path")
+  entityType  String   @map("entity_type") // project, shot, prompt, etc.
+  entityId    String   @map("entity_id")
+  usageType   String   @map("usage_type") // input, output, reference
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([entityType, entityId])
+  @@index([filePath])
+  @@map("studio_file_usages")
+}
+
+// 23. 文件与任务 - Task
+model Task {
+  id          String   @id @default(cuid())
+  name        String
+  type        TaskType
+  status      TaskStatus @default(PENDING)
+  inputData   String?   @map("input_data") @db.Text
+  outputData  String?   @map("output_data") @db.Text
+  errorMessage String?  @map("error_message")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  taskLinks TaskLink[]
+
+  @@index([status, type])
+  @@index([createdAt])
+  @@map("tasks")
+}
+
+// 24. 文件与任务 - TaskLink
+model TaskLink {
+  id          String  @id @default(cuid())
+  taskId      String  @map("task_id")
+  entityType  String  @map("entity_type") // project, chapter, shot, etc.
+  entityId    String  @map("entity_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id])
+
+  @@unique([taskId, entityType, entityId])
+  @@map("task_links")
+}
+
+// 25. 提示词与时间线 - PromptTemplate
+model PromptTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  agentType   String   @map("agent_type") // script_divider, extractor, etc.
+  systemPrompt String  @map("system_prompt") @db.Text
+  userPrompt  String   @map("user_prompt") @db.Text
+  variables   String?  // JSON 格式，变量定义
+  modelSettings String? @map("model_settings") // JSON 格式
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("prompt_templates")
+}
+
+// 26. 提示词与时间线 - PromptFile
+model PromptFile {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  content     String   @db.Text
+  fileType    String   @map("file_type") // txt, md, json
+  version     Int      @default(1)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  timelines StudioPromptFilesTimeline[]
+
+  @@map("prompt_files")
+}
+
+// 27. 提示词与时间线 - StudioTimeline
+model StudioTimeline {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  name        String   // 时间线名称
+  description String?
+  order       Int      @default(0) // 排序
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project     Project                 @relation(fields: [projectId], references: [id])
+  promptFiles StudioPromptFilesTimeline[]
+
+  @@map("studio_timeline")
+}
+
+// 28. 提示词与时间线 - StudioPromptFilesTimeline
+model StudioPromptFilesTimeline {
+  id            String   @id @default(cuid())
+  timelineId    String   @map("timeline_id")
+  promptFileId  String   @map("prompt_file_id")
+  order         Int      @default(0) @map("order")
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  timeline    StudioTimeline  @relation(fields: [timelineId], references: [id])
+  promptFile  PromptFile      @relation(fields: [promptFileId], references: [id])
+
+  @@map("studio_prompts_files_timeline")
+}
